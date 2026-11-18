@@ -1,7 +1,7 @@
-// Mock J2534 PassThru DLL (op20pt32.dll) that simulates a few Porsche control units, so OpenDiag
+// Mock J2534 PassThru DLL (op20pt32.dll) that simulates a few Porsche control units, so PorscheTool
 // can be tested end-to-end without a car (e.g. under Wine):
 //   i686-w64-mingw32-g++ -shared -static -O2 mock_j2534.cpp -o op20pt32.dll -Wl,--kill-at
-// Put op20pt32.dll next to OpenDiag.exe (on a PC without a registered J2534 driver).
+// Put op20pt32.dll next to PorscheTool.exe (on a PC without a registered J2534 driver).
 //
 // Simulated units:
 //   0x70F/0x779 PDK (KWP2000)   : P1872 stored; clear needs session 0x89
@@ -52,8 +52,17 @@ static void handle(unsigned long tx, const uint8_t *q, size_t n) {
     if (e.proto == 1) {                                                   // UDS
         if (sid == 0x19 && q[1] == 0x02) { std::vector<uint8_t> r = {0x59,0x02,0xFF};
             if (!e.cleared) for (auto &f : e.faults) r.insert(r.end(), f.begin(), f.end()); reply(rx, r); return; }
+        if (sid == 0x22 && tx == 0x755 && q[1] == 0x00 && q[2] == 0xA0) { reply(rx, {0x62, 0x00, 0xA0, 0x01, 0xF4}); return; }   // 500 mm
+        if (sid == 0x22 && tx == 0x755 && q[1] == 0x04 && q[2] == 0xA0) { reply(rx, {0x62, 0x04, 0xA0, 0x07}); return; }
         if (sid == 0x22) { const char *v = tx == 0x755 ? "97034301234" : "4H0959655"; std::vector<uint8_t> r = {0x62, q[1], q[2]};
             r.insert(r.end(), v, v + strlen(v)); reply(rx, r); return; }
+        if (sid == 0x31 && tx == 0x755 && q[2] == 0xF1 && q[3] == 0x05) {               // level the car
+            if (e.session != 3) return nrc(0x7F);
+            if (q[1] == 1) { e.pending = 0; reply(rx, {0x71, 0x01, 0xF1, 0x05}); return; }
+            if (q[1] == 3) { e.pending++; reply(rx, {0x71, 0x03, 0xF1, 0x05, (uint8_t)(e.pending < 3 ? 1 : 2)}); return; }
+            if (q[1] == 2) { reply(rx, {0x71, 0x02, 0xF1, 0x05}); return; }
+        }
+        if (sid == 0x3E) { if (!(q[1] & 0x80)) reply(rx, {0x7E, 0x00}); return; }
         if (sid == 0x14) { e.cleared = true; reply(rx, {0x54}); return; }
         return nrc(0x11);
     }

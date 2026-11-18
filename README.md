@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/status-not%20yet%20tested%20on%20a%20car-orange?style=flat-square" alt="Status">
 </p>
 
-# OpenDiag – open-source Porsche diagnostics
+# PorscheTool – open-source Porsche diagnostics
 
 **Read and clear the fault memory of every control unit, with English fault descriptions. One small Windows exe and a
 J2534 cable.** Built for independent workshops and owners: the right to repair your own car.
@@ -29,7 +29,7 @@ English text.
 | 🎯 | **One module** | Read or clear a single control unit. |
 | 📄 | **Report** | Every scan is saved as a text file next to the exe. |
 | 🔀 | **UDS + KWP2000** | Detects the protocol per unit and falls back automatically (the 970 mixes both). |
-| ⌨️ | **Command line** | `OpenDiag.exe --scan` scans, saves the report and exits, for scripted use. |
+| ⌨️ | **Command line** | `PorscheTool.exe --scan` scans, saves the report and exits, for scripted use. |
 
 ### Control units (Panamera 970)
 
@@ -45,8 +45,8 @@ not scanned yet.
 
 1. Install the driver for your J2534 adapter (Tactrix: *OpenPort 2.0 J2534 drivers*).
 2. Connect the adapter to the OBD port. Ignition **ON**, engine off. A battery charger is recommended.
-3. Start `OpenDiag.exe`. The status line turns green: **Adapter: CONNECTED**.
-4. Press **SCAN ALL MODULES**. The report `OpenDiag_scan_<date>.txt` is saved next to the exe.
+3. Start `PorscheTool.exe`. The status line turns green: **Adapter: CONNECTED**.
+4. Press **SCAN ALL MODULES**. The report `PorscheTool_scan_<date>.txt` is saved next to the exe.
 
 ## Roadmap: service functions
 
@@ -62,7 +62,7 @@ PDK teach-in and gearbox diagnostics are already available in the sister project
 ## Building from source
 
 ```sh
-./build.sh          # runs the unit tests, then builds OpenDiag.exe (32-bit, static) with mingw-w64
+./build.sh          # runs the unit tests, then builds PorscheTool.exe (32-bit, static) with mingw-w64
 ```
 
 32-bit on purpose: most J2534 drivers are 32-bit DLLs.
@@ -85,12 +85,12 @@ texts.
 - `tests/test_core.cpp`: response parsing, code formatting, catalogue lookups and table sanity, on any OS.
 - `tests/mock_j2534.cpp`: a fake `op20pt32.dll` that simulates a PDK (KWP, clear needs session 0x89), PASM (UDS), an
   airbag unit, a gear selector that refuses UDS, and an engine unit that answers "response pending". Put it next to
-  `OpenDiag.exe` (for example under Wine) and run `OpenDiag.exe --scan` or `--clear-all`.
+  `PorscheTool.exe` (for example under Wine) and run `PorscheTool.exe --scan` or `--clear-all`.
 
 ## Repository layout
 
 ```
-src/opendiag.cpp        Windows app: J2534, UDS/KWP transport, scan/clear, GUI
+src/porschetool.cpp        Windows app: J2534, UDS/KWP transport, scan/clear, GUI
 src/diag_core.h         protocol-independent parsing and formatting (unit-tested)
 src/vehicle_g1.h        generated module table + English fault catalogue (Panamera 970)
 tools/build_vehicle.py  generator (reads your local diagnostic database)
@@ -102,6 +102,6 @@ docs/                   service-function catalogue
 
 ## Disclaimer
 
-OpenDiag is an independent project. It is not affiliated with, endorsed by or connected to Porsche AG. "Porsche",
+PorscheTool is an independent project. It is not affiliated with, endorsed by or connected to Porsche AG. "Porsche",
 "Panamera", "PDK", "PASM", "PDCC" and "PSM" are trademarks of their owner and are used only to describe compatibility.
 Use at your own risk. Write down the faults before you clear them, and do not run tests while driving.

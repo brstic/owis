@@ -5,7 +5,7 @@ UDS (ISO 14229) unless marked KWP. `31 01 xxxx` = start routine, `31 03 xxxx` = 
 `2E/22 xxxx` = write/read data identifier, `2F xxxx` = input/output control.
 
 > [!NOTE]
-> **Status:** this is the map for the next OpenDiag releases. The IDs come from the diagnostic database of the car
+> **Status:** this is the map for the next PorscheTool releases. The IDs come from the diagnostic database of the car
 > line. The routine option bytes, result layouts and preconditions still have to be decoded, and every function has
 > to be checked on a car before the tool offers it. The **SA** column shows that the unit defines SecurityAccess
 > levels. Whether a given routine needs unlocking is not yet confirmed.
@@ -35,7 +35,7 @@ UDS (ISO 14229) unless marked KWP. `31 01 xxxx` = start routine, `31 03 xxxx` = 
 
 ## Deliberately out of scope
 
-These exist in the database. OpenDiag will **not** implement them: they are anti-theft, odometer, crash-data or
+These exist in the database. PorscheTool will **not** implement them: they are anti-theft, odometer, crash-data or
 high-voltage safety functions, not repair procedures.
 
 - Instrument cluster odometer writes, immobiliser / key learning, KESSY and BCM crypto resets.

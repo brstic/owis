@@ -1,9 +1,10 @@
 # build output
-OpenDiag.exe
+PorscheTool.exe
 tests/test_core
+tests/test_pack
 *.dll
 # scan reports (may contain VINs)
-OpenDiag_*.txt
+PorscheTool_*.txt
 # local PIWIS-derived working data - never commit
 data/
 tools/i18n/untranslated_*.json
