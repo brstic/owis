@@ -21,6 +21,7 @@ Usage: python3 -I build_pack.py <PIWIS project dir> <PLATFORM> <out.json> [--lan
 import sys, os, re, json, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import odxdb as ox
+import seedkey_map as skmap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SESS = {"Default": 1, "Standard": 1, "Extended": 2, "Diagnose": 2, "EndOfLine": 4, "Development": 8, "Programming": 16}
@@ -190,7 +191,13 @@ def build(proj, platform, title, lang="en", progress=print):
             m["_dtcseen"].add((bits, code)); m["dtc"].append([code, bits, pk.S(txt)])
         progress("  %-34s %s svc %4d dtc %4d" % (name, " ".join("%03X/%03X" % p for p in ids[:2]) or "no CAN", len(svcs), len(dtcs)))
     mods = list(groups.values()) + nocan
-    for m in mods: m.pop("_seen"); m.pop("_dtcseen")
+    for m in mods:
+        m.pop("_seen"); m.pop("_dtcseen")
+        # coding-unlock algorithm name (reference only; constants live in the local key file).
+        # Only emitted when at least one service of this module needs a Codierung key.
+        algo = skmap.algo_for(m["k"])
+        if algo and any(len(s) > 3 and (s[3] & 0x100) for s in m["svc"]):
+            m["sk"] = algo
     progress("  excluded functions (anti-theft, odometer, crash, HV safety, flashing, raw protocol): %d" % excluded[0])
     return {"v": 1, "platform": platform, "title": title, "lang": lang, "str": pk.strs, "dops": pk.dops, "mods": mods}, pk.missing
 

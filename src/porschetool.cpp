@@ -18,6 +18,7 @@
 #include <cstring>
 #include <algorithm>
 #include "diag_core.h"
+#include "seedkey.h"
 #include "pack.h"
 
 #define APP_TITLE "PorscheTool - open-source Porsche diagnostics"
@@ -483,19 +484,65 @@ static void printValues(const std::vector<pk::Value> &vs) {
         else outLine(ind + A(v.name) + " = " + A(v.text) + (v.unit.empty() ? "" : " " + A(v.unit)));
     }
 }
+// Unlock Codierung security access for a module using the local key file. Returns true if the module
+// is unlocked (or was already open / needs no seed); otherwise fills 'why' with a readable reason.
+// A correct key is computed locally; only a wrong key risks a control unit's attempt counter, so we
+// never send a guessed key - if no key is available we report it and send nothing.
+static bool securityUnlock(Bus &b, const pk::Module &m, int proto, std::string &why) {
+    if (m.sk.empty()) { why = "no coding key mapped for this control unit"; return false; }
+    const sk::Key *k = sk::find(m.sk);
+    if (!k) {
+        why = sk::loaded() ? ("algorithm " + m.sk + " is not in the key file (not ported yet)")
+                           : "key file porschetool.keys not found - coding writes disabled";
+        return false;
+    }
+    std::vector<uint8_t> r;
+    if (proto == PROTO_KWP) b.xfer({0x10, 0x89}, r, 1500); else b.xfer({0x10, 0x03}, r, 1500);
+    const uint8_t levels[2] = {0x03, 0x01};                 // coding level first, then the generic level
+    for (uint8_t lvl : levels) {
+        if (!b.xfer({0x27, lvl}, r, 2000)) {
+            if (b.lastNrc == 0x12 || b.lastNrc == 0x11) continue;    // sub-function unknown -> try the other level
+            why = "seed request refused (" + nrcText(b.lastNrc) + ")"; return false;
+        }
+        std::vector<uint8_t> seed(r.begin() + (r.size() >= 2 ? 2 : r.size()), r.end());
+        bool allzero = !seed.empty(); for (uint8_t x : seed) if (x) { allzero = false; break; }
+        if (seed.empty() || allzero) return true;           // already unlocked
+        std::vector<uint8_t> s = seed; if ((int)s.size() > k->nb) s.resize(k->nb);
+        std::vector<uint8_t> key;
+        if (!sk::compute(*k, s, key)) { why = "key computation failed for " + m.sk; return false; }
+        std::vector<uint8_t> req = {0x27, (uint8_t)(lvl + 1)};
+        req.insert(req.end(), key.begin(), key.end());
+        if (b.xfer(req, r, 2000)) return true;              // {0x67, lvl+1} = unlocked
+        why = "key rejected by control unit (" + nrcText(b.lastNrc) + ")"; return false;
+    }
+    why = "control unit did not offer the coding security level"; return false;
+}
+
 // run one service; returns true on a positive answer
 static bool runService(Bus &b, const pk::Module &m, int si, int proto, const std::vector<double> &in, std::vector<pk::Value> &vals, bool quiet = false) {
     const pk::Service &s = m.svc[si];
     std::vector<uint8_t> rq, r; std::string err;
     if (!g_pack.buildRequest(s, in, rq, err)) { outLine("[ERROR] " + err); return false; }
     ensureSession(b, m, s, proto);
+    if (s.sess & 0x100) {                                                          // service needs Codierung unlock
+        std::string why;
+        if (securityUnlock(b, m, proto, why)) { if (!quiet) outLine("[UNLOCKED] security access granted (" + m.sk + ")"); }
+        else if (!quiet) outLine("[LOCKED] " + why);
+    }
     if (!quiet) outLine("> " + hex(rq.data(), rq.size()));
     if (!b.xfer(rq, r, 3000)) {
         if (b.lastNrc == 0x7F || b.lastNrc == 0x7E || b.lastNrc == 0x80) {          // retry in the extended session
             std::vector<uint8_t> x; if (proto == PROTO_KWP) b.xfer({0x10, 0x89}, x, 1500); else b.xfer({0x10, 0x03}, x, 1500);
             if (b.xfer(rq, r, 3000)) goto ok;
         }
-        if (b.lastNrc) outLine("[REFUSED] " + nrcText(b.lastNrc) + (b.lastNrc == 0x33 ? " - this function needs security access (not yet supported for this module)" : ""));
+        if (b.lastNrc == 0x33) {                                                    // security denied: unlock and retry once
+            std::string why;
+            if (securityUnlock(b, m, proto, why)) {
+                if (!quiet) outLine("[UNLOCKED] security access granted (" + m.sk + ")");
+                if (b.xfer(rq, r, 3000)) goto ok;
+            } else if (!quiet) outLine("[LOCKED] " + why);
+        }
+        if (b.lastNrc) outLine("[REFUSED] " + nrcText(b.lastNrc) + (b.lastNrc == 0x33 ? " - needs security access (no coding key available for this module)" : ""));
         else outLine("[NO ANSWER] module did not respond");
         return false;
     }
@@ -923,6 +970,7 @@ int WINAPI WinMain(HINSTANCE hi, HINSTANCE, LPSTR cmd, int show) {
         }
     }
     g_sessionLog = fopen((exeDir() + "\\PorscheTool_log_" + stamp().substr(0, 8) + ".txt").c_str(), "a");
+    sk::load(exeDir() + "\\porschetool.keys");     // optional local Codierung key file
     WNDCLASSA wc = {0}; wc.hInstance = hi; wc.hCursor = LoadCursor(0, IDC_ARROW); wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     wc.lpfnWndProc = WndProc; wc.lpszClassName = "PorscheToolWnd"; RegisterClassA(&wc);
     wc.lpfnWndProc = ModProc; wc.lpszClassName = "PTModule"; RegisterClassA(&wc);

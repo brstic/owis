@@ -24,7 +24,7 @@ struct Dop {
 struct Param { int name; int byte, bit, bits; bool hasConst; double cval; int dop; };
 struct Service { int name; std::string cls, sem; int sess; std::vector<Param> rq, rs; };
 struct Dtc { uint32_t code; int bits; int text; };
-struct Module { std::string key; int name; std::vector<std::pair<int, int>> ids; int proto; std::vector<Service> svc; std::vector<Dtc> dtc; };
+struct Module { std::string key; int name; std::vector<std::pair<int, int>> ids; int proto; std::vector<Service> svc; std::vector<Dtc> dtc; std::string sk; };
 
 struct Value { std::string name, text, unit; double num = NAN; int depth = 0; };
 
@@ -46,6 +46,7 @@ public:
         for (auto &d : j["dops"].a) dops.push_back(dopOf(d));
         for (auto &m : j["mods"].a) {
             Module mo; mo.key = m["k"].s; mo.name = m["n"].i(); mo.proto = m["p"].i();
+            if (!m["sk"].isNull()) mo.sk = m["sk"].s;
             for (auto &p : m["ids"].a) mo.ids.push_back({p[0].i(), p[1].i()});
             for (auto &s : m["svc"].a) {
                 Service sv; sv.name = s[0].i(); sv.cls = s[1].s; sv.sem = s[2].s; sv.sess = s[3].i();

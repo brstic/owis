@@ -94,23 +94,56 @@ UDS and an engine unit that answers "response pending". Run under Wine: scan, cl
 
 ## Vehicle coverage (data packs)
 
-Built & verified: **G1** (Panamera 970), **9x1** (911 991 / 981 / 718), **CS1**, **918S**, **992** (911 992, ODX 2.2).
-In progress / next: **Cajun** (Macan), **E2/E3** (Cayenne), **J1** (Taycan), **MIG/9x7/9x6/E1** (997/987, 996/986,
-Cayenne 955). Each pack ≈ 10k–22k services across 40–68 control units. KWP lines (G1/9x1/918) mix UDS+KWP; 992/newer
-are UDS with 29-bit addressing on many modules.
+Built & verified: **G1** (Panamera 970), **9x1** (911 991 / 981 / 718), **CS1**, **918S**, **992** (911 992,
+ODX 2.2), **Cajun** (Macan), **E2** (Cayenne 92A), **E3** (Cayenne 9Y0). Next: **J1** (Taycan),
+**MIG/9x7/9x6/E1** (997/987, 996/986, Cayenne 955). Each pack ≈ 8k–22k services across 15–96 control units.
+KWP lines (G1/9x1/918) mix UDS+KWP; 992/newer are UDS with 29-bit addressing on many modules.
 
 ## Seed/key (coding unlock) — see §14 of PDK_TCU_KNOWLEDGE.md
 
 Needed only for coding **writes** (0x2E) and a few actuator tests; reading, routines and most tests need no key.
-87 module jars catalogued (local, `~/Projects/porsche/seedkey/`): 66 solved — **keyed-multiply**
-`key=((seed^K)*A+B)` (57) and **2-byte rotate table** (9). 21 array-hash jars (EPB, BDE, ACC3, Lift_VA, SWSG,
-kombi, …) still to port from bytecode. 992+ uses online SFD, not computable offline.
+87 module jars catalogued (local, `~/Projects/porsche/seedkey/`). The former 21 "array-hash" jars were
+reverse-engineered from the jar bytecode (javap) and fall into seven algorithm families, each **verified
+against the jar's own seed→key vectors** before shipping (a wrong port could trip a control unit's attempt
+counter, so nothing is emitted that does not match 100%):
+
+| family | key formula | jars |
+|--------|-------------|------|
+| `kmul`  | `((seed^K)*A+B) mod 2^32` (incl. `~seed` as K=0xFFFFFFFF, and the kKrypto jars) | 61 |
+| `table` | 2-byte rotate table lookup | 7 |
+| `bmrot` | rotate-left/right by bit-selected count, then AND/OR/XOR/NOT | ACC3, BDE_COD(+W06), HR3 |
+| `dia`   | 24/32-bit rotate-LFSR bit-hash over seed‖fixed, then nibble packing | EPB, EPB_VR7, EPB_VR8 |
+| `lfsr`  | shift-left + conditional XOR const, 9 rounds | ESP_DL, EPB_dl |
+| `kombi` | byte permutation + 31 add/XOR rounds | kombi_9x1_codierung |
+| `rsr`   | add const, rotate-right ×2, conditional XOR const, 26 rounds | Airbag_Codierung |
+
+79 algorithms ship in the key file; all **36** modules mapped by `seedkey_map.py` unlock. 992+ uses online
+SFD, not computable offline. Still unshipped (out of scope / not coding): airbag memory download & upload,
+BDE download/programming. The RE harness is `~/Projects/porsche/seedkey/` (Params.java dumps fields +
+vectors, extract_array.py ports & verifies each family). Full write-up in PDK_TCU_KNOWLEDGE.md §14.
+
+**Wired into the tool (verified, no car):**
+- `tools/seedkey_map.py` — maps a module key (pack `k`) to its coding seed/key algorithm *name* only. 36
+  high-confidence modules mapped; a wrong key can trip a control unit's SecurityAccess attempt counter, so
+  unmapped modules get no key and the app says so rather than guessing. `BV_*UDS` (992+) are left unmapped (SFD).
+- `build_pack.py` now emits `"sk": <algo-name>` on each module that has a Codierung-flagged service (bit 8).
+- `tools/build_keyfile.py` — turns the local catalogue (+ `full_tables/`) into a single binary
+  `porschetool.keys` (magic `PTKEY1`): 57 keyed-multiply + 7 rotate-table algorithms. **Local only, gitignored**
+  — it holds the unlock constants. Array-hash algorithms are not in it yet.
+- `src/seedkey.h` — loads `porschetool.keys`, computes the key (`((seed^K)*A+B) mod 2^8nb`, or a table lookup).
+  Verified byte-for-byte against the Python reference for keyed-multiply, and against the dumped tables.
+- `src/porschetool.cpp` — `securityUnlock()` runs 0x27 (request seed at the coding level, else the generic
+  level; compute; send key) and is called automatically before a bit-8 coding write and on an NRC 0x33 retry.
+  All 36 mapped modules unlock. Without the key file the app still does everything except coding writes.
+  The seed/key maths (all seven families) is verified byte-for-byte against the PIWIS jar vectors in `seedkey.h`
+  (native `skvec` harness, 960 vectors); the on-car 0x27 request/response exchange itself is pending a
+  mock/real-car confirmation (as with the earlier PdkTool).
 
 ## TODO (next sessions)
 
 1. Build packs for the remaining lines (Cajun, E2, E3, J1, 9x7/9x6/E1).
-2. Port the 21 remaining array-hash seed/key algorithms; wire seed/key into the app so coding writes work; map each
-   module to its seed/key algorithm (from the DB's SecurityAccess job reference).
+2. Confirm the 0x27 seed/key exchange against the mock / a real car (the key maths is already verified); extend
+   the module→algorithm map beyond the 36 high-confidence entries as more are confirmed.
 3. Publish `porsche-tool` as a public repo (banner, README, release) — same redaction rules as pdk-3000-tool.
 4. Freeze-frame / environment data decoding for UDS DTCs (SDG files hold the system reaction per fault).
 5. Per-module safety notes for the risky write/actuator functions.

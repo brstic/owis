@@ -7,6 +7,13 @@ tests/test_pack
 PorscheTool_*.txt
 # local PIWIS-derived working data - never commit
 data/
+# Codierung key file and seed/key constants - LOCAL ONLY, hold unlock keys, never commit
+porschetool.keys
+*.keys
+tools/seedkey/*catalog*.json
+tools/seedkey/kmul.json
+tools/seedkey/algos.json
+tools/seedkey/full_tables/
 tools/i18n/untranslated_*.json
 __pycache__/
 .DS_Store
