@@ -43,9 +43,15 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
 - [ ] Confirm the VW TP 2.0 addresses of the sub-bus units (standard VW addresses, marked "not yet confirmed" in the app).
 - [ ] Run each guided job once on a car of each line and adjust its wording from what the car shows.
 
-### 2. Coding coverage (needs confirmation on a car)
-- [ ] Extend `seedkey_map.py` past the 36 high-confidence units as each is confirmed (never map on a guess).
-- [ ] Map the classic seed/key units of 992 / J1 / E3 / G2 that do not use SFD.
+### 2. Coding coverage
+- [x] The coding algorithm of every unit is now read from the database itself (the SeedKey job of the Codierung
+      level names it - the same reference PIWIS uses), so nothing is mapped on a guess; `seedkey_map.py` only keeps
+      a few hand overrides (hardware-variant names). Engine control units are deliberately left without a key
+      (calibration / emissions-relevant changes are out of scope) and their calibration-data writes are not offered.
+      Checking the old hand table against the database corrected the instrument cluster of 970 / 918 / 92A (database:
+      `ASAM_Seedkey_Ki`, not the 991 cluster algorithm) and the rear differential lock (database: no real coding key).
+- [ ] 992 / J1 / E3 / G2: their databases name no offline coding algorithm (SFD) - nothing to map offline.
+- [ ] Confirm the unlock on a real unit of each algorithm family (part of section 1).
 
 ### 3. Sub-bus control units — done
 - [x] VW TP 2.0 transport (`src/tp20.h`): channel setup, parameters, numbered frames with ACK, keep-alive. Doors,

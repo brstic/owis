@@ -150,9 +150,12 @@ BDE download/programming. The RE harness is `~/Projects/porsche/seedkey/` (Param
 vectors, extract_array.py ports & verifies each family). Full write-up in PDK_TCU_KNOWLEDGE.md §14.
 
 **Wired into the tool (verified, no car):**
-- `tools/seedkey_map.py` — maps a module key (pack `k`) to its coding seed/key algorithm *name* only. 36
-  high-confidence modules mapped; a wrong key can trip a control unit's SecurityAccess attempt counter, so
-  unmapped modules get no key and the app says so rather than guessing. `BV_*UDS` (992+) are left unmapped (SFD).
+- `odxdb.Ecu.codierung_algo()` — reads the coding seed/key algorithm *name* each control unit's database states:
+  the request of the SeedKey job has the constant parameters `DLL` (algorithm) and `mode` (access level); the one
+  with mode `Codierung` is the coding algorithm. This is the authoritative source, not a guess. A `…_Dummy`
+  algorithm means the unit has no real coding key - none is sent. `tools/seedkey_map.py` holds only hand overrides (hardware-variant base
+  names) and the rule that engine control units get no key (calibration is out of scope). 992+ databases name no
+  offline algorithm (SFD).
 - `build_pack.py` now emits `"sk": <algo-name>` on each module that has a Codierung-flagged service (bit 8).
 - `tools/build_keyfile.py` — turns the local catalogue (+ `full_tables/`) into a single binary
   `porschetool.keys` (magic `PTKEY1`): 57 keyed-multiply + 7 rotate-table algorithms. **Local only, gitignored**

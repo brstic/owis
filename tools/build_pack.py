@@ -214,6 +214,9 @@ EXCLUDE_RE = re.compile(r"(?i)(Wegfahrsperre|Immobili|WFS|Key.?Learn|Schl(ue|ü)
                         r"Erase.?Memory|Flash|Programmier(ung|session|modus)|Programming|Bootloader|Download|Upload|"
                         r"Memory.?(Read|Write)|Transfer.?Data|Security.?Access|SecurAcces|Seed|Fingerprint|Kodiercontainer|"
                         r"protection.?of.?vehicle.?diagnosis|Schutz.?Fahrzeug.?Diagnose)")
+# Engine calibration data (maps, characteristic values) is emissions-relevant: never offered as a write.
+ENGINE_RE = re.compile(r"(?i)ECM|DME|BDE|MED\d|SIMOS|EDC\d|EnginContr|Motorsteuer|_bde$|sdi41|med91")
+ENGINE_CAL_RE = re.compile(r"(?i)Calibrierdaten|Kalibrierdaten|Kalibrierung.?daten|calibration.?data|Kennfeld|Kennlinie|Applikationsdaten|application.?data")
 EXCLUDE_SID = {0x23, 0x27, 0x28, 0x29, 0x34, 0x35, 0x36, 0x37, 0x3D, 0x83, 0x84, 0x85, 0x86, 0x87, 0x10, 0x11, 0x3E,
                0x14, 0x18, 0x19, 0x17, 0x12, 0x13}
 
@@ -335,6 +338,7 @@ def build(proj, platform, title, lang="en", progress=print):
     for f in ox.ecu_files(proj):
         name = f[6:-6]
         e = ox.Ecu(proj, f)
+        cod_algo = e.codierung_algo()
         ids = pair_ids(e.can_ids()); kl = None
         if not ids: ids = can_link(e, name, links) or []
         if not ids:
@@ -357,7 +361,7 @@ def build(proj, platform, title, lang="en", progress=print):
                     base = re.sub(r"^BV_", "", name)
                     nice = vw_name(name, tlinks.get(base) or tlinks.get(re.sub(r"_\w+$", "", base)))
             m = {"k": name, "n": pk.L(nice) if nice else pk.S(ln, name), "ids": [list(p) for p in ids[:3]], "p": proto, "svc": [], "dtc": [],
-                 "_seen": set(), "_dtcseen": set(), "dbs": [], "_src": []}
+                 "_seen": set(), "_dtcseen": set(), "dbs": [], "_src": [], "_cod": cod_algo}
             if kl: m["link"] = 1; m["kl"] = kl; m["p"] = 2
             if tplinks: m["_tp"] = tplinks
             if pr: groups[pr] = m
@@ -381,7 +385,8 @@ def build(proj, platform, title, lang="en", progress=print):
             sid = s["request"][0].get("const") if s["request"] else None
             if sid == 0x29 or re.search(r"(?<![A-Za-z])SFD(?![a-z])|Schutz.?Fahrzeug.?Diagnose|protection.?of.?vehicle.?diagnosis", s["sn"] + " " + s["ln"], re.I):
                 m["sfd"] = 1                               # unit protected by online authentication (see docs/SFD.md)
-            if sid in EXCLUDE_SID or EXCLUDE_RE.search(s["sn"] + " " + s["ln"]):
+            if sid in EXCLUDE_SID or EXCLUDE_RE.search(s["sn"] + " " + s["ln"]) or \
+               (sid in (0x2E, 0x3B) and ENGINE_RE.search(name) and ENGINE_CAL_RE.search(s["sn"] + " " + s["ln"])):
                 excluded[0] += 1; continue
             mask = 0
             for x in s["sessions"]: mask |= SESS.get(x, 0)
@@ -403,7 +408,7 @@ def build(proj, platform, title, lang="en", progress=print):
         for n2, l in sorted(tl, key=lambda x: TP20_ADDR[x[0]]):
             t = dict(m); t["k"] = m["k"] if len(tl) == 1 else "%s_%s" % (m["k"], n2)
             t["n"] = pk.S(l.get("ln") or n2, n2); t["ids"] = [[TP20_ADDR[n2], 0]]; t["link"] = 2; t["p"] = 2; t["tpc"] = 0
-            t["_base"] = m["k"]
+            t["_base"] = m["k"]; t["_cod"] = m.get("_cod")
             tp_mods.append(t)
     for m in nocan: m.pop("_tp", None)
     mods = list(groups.values()) + tp_mods + nocan
@@ -425,7 +430,7 @@ def build(proj, platform, title, lang="en", progress=print):
     for m in mods:
         # coding-unlock algorithm name (reference only; constants live in the local key file).
         # Only emitted when at least one service of this module needs a Codierung key.
-        algo = skmap.algo_for(m.pop("_base", m["k"]))
+        algo = skmap.algo_for(m.pop("_base", m["k"]), m.pop("_cod", None))
         if algo and any(len(s) > 3 and (s[3] & 0x100) for s in m["svc"]):
             m["sk"] = algo
     progress("  units with online authentication (SFD): %d" % sum(1 for m in mods if m.get("sfd")))

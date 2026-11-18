@@ -441,6 +441,26 @@ class Ecu:
                     else: res.setdefault(v, set())
         return {k: sorted(v) for k, v in res.items()}
 
+    def codierung_algo(self):
+        """The seed/key algorithm this control unit uses for Codierung (coding), as the database states it.
+        The request of the SeedKey job carries two parameters with constant values: "DLL" (the algorithm,
+        "DLL-Name ohne Extension") and "mode" (the access level: Codierung, Download, Upload ...).
+        Returns the algorithm of the Codierung level, or None. This is what PIWIS itself uses - not a guess."""
+        import re as _re
+        found = []
+        for r in self.recs[:self.own]:
+            if r[0] != 0x78: continue
+            seq = [(q, self.n(u32(r, q))) for q in range(0, len(r) - 3) if self.n(u32(r, q))]
+            names = [v for q, v in seq]
+            if "DLL" not in names or "mode" not in names: continue
+            idll = names.index("DLL"); imode = names.index("mode")
+            alg = next((v for v in names[idll + 1:imode]
+                        if _re.fullmatch(r"(?i)ASAM_seed\w*|SeedKey_BCM_\w+|Seedkey_PLG_\w+|kombi_\w*codierung|SWSG_Single_Seedkey|SWSG_seedkey", v)
+                        and not _re.search(r"_\d{3,}$", v) and "_Jobs" not in v), None)
+            mode = next((v for v in names[imode + 1:] if v in ("Codierung", "Download", "Upload", "Login", "Development", "Entwicklung")), None)
+            if alg and mode == "Codierung": found.append(alg)          # may be ..._Dummy: the unit has no real coding key
+        return found[0] if len(set(found)) == 1 else (found[0] if found else None)
+
     def can_ids(self):
         res = collections.defaultdict(set)
         hs = {"req": djb2("CP_CanPhysReqId"), "resp": djb2("CP_CanRespUSDTId")}
