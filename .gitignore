@@ -17,3 +17,7 @@ tools/seedkey/full_tables/
 tools/i18n/untranslated_*.json
 __pycache__/
 .DS_Store
+# build output, reports, traces, live-data logs (may contain VINs)
+build/
+PorscheTool_*
+*.ptrace

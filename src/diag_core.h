@@ -70,6 +70,55 @@ static inline std::string kwpStatus(uint8_t s) {
 }
 static inline std::string statusText(const Dtc &d) { return d.bits == 24 ? udsStatus(d.status) : kwpStatus(d.status); }
 
+// Full breakdown of the UDS status byte, for the detail view under a fault.
+static inline std::string udsStatusDetail(uint8_t s) {
+    std::string t;
+    auto add = [&](const char *x) { if (!t.empty()) t += ", "; t += x; };
+    if (s & 0x01) add("test failed now");
+    if (s & 0x02) add("failed this drive cycle");
+    if (s & 0x04) add("pending (not yet confirmed)");
+    if (s & 0x08) add((s & 0x01) ? "confirmed" : "confirmed / stored");
+    if ((s & 0x08) && !(s & 0x01) && !(s & 0x02)) add("not seen this drive cycle (ageing)");
+    if (s & 0x20) add("failed since last clear");
+    if (s & 0x10) add("not tested since last clear");
+    if (s & 0x40) add("not tested this drive cycle");
+    if (s & 0x80) add("warning lamp requested");
+    if (t.empty()) t = "no status bits set";
+    return t;
+}
+
+// ---------------------------------------------------------------- VIN
+// A VIN is 17 characters, capital letters and digits without I, O, Q.
+static inline bool vinValid(const std::string &v) {
+    if (v.size() != 17) return false;
+    for (char c : v) if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')) || c == 'I' || c == 'O' || c == 'Q') return false;
+    return true;
+}
+// Porsche model type from the VIN: positions 7, 8 and 12 (e.g. WP0ZZZ97ZCL0..... -> "970").
+// North-American VINs describe the car in positions 4-6 and put a filler 'A' in position 7: the type is then
+// '9' + position 8 + position 12 (WP0AA2A7XBL0..... -> "970").
+static inline std::string vinModelType(const std::string &v) {
+    if (!vinValid(v) || v.compare(0, 2, "WP") != 0) return "";
+    if (v[6] == 'A' && v.compare(3, 3, "ZZZ") != 0) return std::string("9") + v[7] + v[11];
+    return std::string() + v[6] + v[7] + v[11];
+}
+// Model year from position 10 (2001..2030 cycle; the older cycle is not used by the supported lines' packs).
+static inline int vinModelYear(const std::string &v) {
+    if (!vinValid(v)) return 0;
+    static const char *Y = "123456789ABCDEFGHJKLMNPRSTVWXY";      // 2001 .. 2030
+    const char *p = strchr(Y, v[9]); return p ? 2001 + (int)(p - Y) : 0;
+}
+// Hide the serial part of a VIN for reports that are shared (keeps maker, model and year).
+static inline std::string vinRedact(const std::string &v) { return v.size() == 17 ? v.substr(0, 11) + "******" : v; }
+// Pick a VIN out of a response payload (ASCII run of 17 valid characters).
+static inline std::string vinFromBytes(const uint8_t *p, size_t n) {
+    for (size_t i = 0; i + 17 <= n; i++) {
+        std::string v((const char *)p + i, 17);
+        if (vinValid(v)) return v;
+    }
+    return "";
+}
+
 // Fault text lookup.  KWP codes are matched on 16 bit; UDS codes on 24 bit, falling back to the
 // SAE part (top 16 bit) for ECUs that report "P-code + failure type byte".
 static inline const DtcText *findText(const DtcText *tab, int module, const Dtc &d) {

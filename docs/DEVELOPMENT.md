@@ -15,11 +15,19 @@ airbag crash-record manipulation, high-voltage battery safety disable, emissions
 ## Architecture
 
 ```
-PIWIS install ──tools/odxdb.py──> per-ECU services (requests, decoded responses, DTCs, CAN ids)
-             └─tools/build_pack.py─> data/<LINE>.json   (one pack per vehicle line)
+PIWIS install ──tools/odxdb.py──> per-ECU services (requests, decoded responses, DTCs, CAN ids, K-line links)
+             └─tools/build_pack.py─> data/<LINE>.json   (one pack per vehicle line, tools/platforms.py)
                                       ↑ English texts: tools/i18n/*.json (hand) + mt (machine)
+                                      ↑ guided jobs: tools/jobs.py (rules, resolved per line at build time)
 src/pack.h (+ json.h)  loads a pack, builds requests, decodes responses (ODX semantics)
-src/porschetool.cpp    Win32 app: J2534 transport (UDS+KWP, 11/29-bit), scan/clear, module window
+src/engine.h           everything done with a car: scan/clear, environment + snapshot data, functions,
+                       coding unlock, jobs, VIN detection, reports            (portable, no Windows)
+src/bus.h              transport interface   ─ j2534_bus.h (Windows: CAN ISO-TP + K-line ISO 14230)
+                                             ─ socketcan_bus.h (Linux: kernel ISO-TP)
+                                             ─ sim.h (simulated car)   ─ trace.h (record / replay)
+src/porschetool.cpp    Win32 app (main window, module window, jobs window, live graph)
+src/cli.cpp            porschetool-cli for Linux / macOS / scripts
+src/safety.h           plain-language hazard notes shown before anything that changes or moves something
 ```
 
 The Windows app ships only `PorscheTool.exe` + the `data/*.json` packs. No PIWIS, no Java, no database at runtime.
@@ -29,10 +37,16 @@ The Windows app ships only `PorscheTool.exe` + the `data/*.json` packs. No PIWIS
 Compact JSON: `{v, platform, title, lang, str[], dops[], mods[]}`. All text is referenced by index into `str`.
 - `dops[]`: a decoded ODX data-object — `["s", base, bits, lentype, msb, compu, scales, unit, mask]` (simple value),
   `["t", fields]` (structure), `["f", item]` (repeated field).
-- `mods[]`: `{k: key, n: name, ids: [[req,resp]...], p: proto, svc: [...], dtc: [[code,bits,text]...]}`.
+- top level also: `vin` (VIN model types → auto-detection), `pn` (part-number prefixes), `sfd` (line uses online
+  authentication for coding), `jobs` (guided jobs: `{id, t, d, w, steps: [[mod, svc, ask, inputs, label]]}`, an input
+  is a number, `null` = asked, or `"$y" "$M" "$D" "$ymd"` = today's date).
+- `mods[]`: `{k: key, n: name, ids: [[req,resp]...], p: proto, svc: [...], dtc: [[code,bits,text]...]}`; optional
+  `sk` (coding algorithm name), `sa` `[seed sub-function, seed bytes]` of the coding level, `link: 1` + `kl: [init,
+  5-baud address, baud]` for K-line units (then `ids = [[ECU address, tester address]]`).
 - `svc`: `[name, category, semantic, sess_and_flags, request_params, response_params]`.
   category: **L** live data · **I** identification · **A** actuator test · **R** routine/basic setting ·
-  **C** adaptation/coding read · **W** adaptation/coding write · **O** other.
+  **C** adaptation/coding read · **W** adaptation/coding write · **O** other · **E** layout of the fault environment
+  data (UDS `19 06`), used by the fault reader and not listed as a function.
   `sess_and_flags`: low byte = session bitmask; **bit 8 = needs Codierung (seed/key) unlock**.
 - `param`: `[name, byte, bit, bits, const|null, dop|-1]`.
 
@@ -70,34 +84,45 @@ Setup: a venv with `ctranslate2 sentencepiece` + the unzipped `translate-de_en-1
 
 `tools/make_packs.py` runs the whole chain (German pack → translate new texts → English pack) for every line.
 
-## The app (`src/porschetool.cpp`)
+## The engine and the apps
 
-- **J2534** via the installed driver (registry `PassThruSupport.04.04`, 32-bit view; falls back to `op20pt32.dll`).
-  32-bit build so it can load the Tactrix 32-bit DLL. `__stdcall` typedefs. 11-bit and 29-bit CAN.
+- **Transports**: J2534 (registry `PassThruSupport.04.04`, 32-bit view; falls back to `op20pt32.dll`; `__stdcall`;
+  ISO 15765 on 11/29-bit CAN, ISO 14230 on the K-line with fast or 5-baud init), Linux SocketCAN (kernel ISO-TP),
+  the simulated car, and replay of a recorded session.
 - **Scan all / clear all**: every module, UDS `19 02` / KWP `18 00`, automatic protocol fallback; identification via
-  `22 F187/F189/F191/F197` or `1A 9B`. Report saved next to the exe. Session log always on.
-- **Module window**: functions grouped by category with a search box. RUN / LIVE (repeat) / STOP, read & clear faults.
-  - live data: repeats the read, shows the decoded values with units, tester-present kept alive.
-  - routines: start, then poll the result service once a second and show status text until it ends or STOP; stop
-    routine sent on exit.
-  - actuator tests: run, hold with tester-present until STOP, then return-control-to-ECU.
-  - adaptation write (2E): reads and logs the current value first, confirms, writes, reads back.
-  - inputs dialog: texttable values become a dropdown (e.g. ride-height level), numbers an edit box.
-- **CLI**: `--scan`, `--clear-all`, `--vehicle <ID>`, `--run <module> "<function>" [inputs...]` for scripted use.
+  `22 F187/F189/F191/F197` or `1A 9B`. For every UDS fault: environment data `19 06 <DTC> FF` decoded with the
+  unit's own layout (or the line's standard records), snapshot `19 04 <DTC> FF` decoded through the unit's read
+  functions for each data identifier, full status-byte breakdown. Text + HTML report next to the exe.
+- **Vehicle detection**: VIN (`22 F190`, KWP `1A 90`, OBD `09 02`) → model type (VIN positions 7/8/12, US VINs
+  handled) → pack; without a VIN, the part numbers of the answering units vote for a line. Runs by itself the first
+  time the adapter is found.
+- **Module window**: functions grouped by category with a search box. RUN / LIVE (several values at once) / GRAPH /
+  STOP, read & clear faults. Routines are followed until their status says finished or failed; actuator tests are
+  held with tester-present until STOP; writes read and log the current value first and read back after.
+  Inputs: text tables as dropdowns, numbers, text and hex-byte fields.
+- **Service jobs window**: the line's guided jobs; everything the user must choose is asked in one dialog, the
+  safety notes are shown, then one button runs every step (session, unlock, run, follow, plain-language result).
+- **Session trace** of every request/response (`PorscheTool_trace_<day>.ptrace`), replayable with `--replay`.
+- **CLI (Windows exe)**: `--scan`, `--clear-all`, `--vehicle <ID|auto>`, `--run <module> "<function>" [inputs...]`,
+  `--job <id> [values...]`, `--demo`, `--replay <trace>`, `--redact-vin`.
+- **porschetool-cli** (Linux/macOS): `vehicles`, `detect`, `modules`, `functions`, `jobs`, `scan`, `clear-all`,
+  `faults`, `clear`, `run`, `live`, `job` over `--can <iface>`, `--demo` or `--replay`.
 
 ### Tested without a car
 
-`tests/test_core.cpp` (fault parsing/formatting) and `tests/test_pack.cpp` (request build + response decode against a
-real pack, plus a sweep over every service). `tests/mock_j2534.cpp` is a fake `op20pt32.dll` that simulates a PDK, a
-PASM (ride-height read 500 mm, levelling routine with a session check), an airbag unit, a gear selector that refuses
-UDS and an engine unit that answers "response pending". Run under Wine: scan, clear-all and `--run` all verified.
+`./build.sh` runs: `tests/test_core.cpp` (fault parsing, status, VIN), `tests/test_pack.cpp` (request build +
+response decode against a real pack, plus a sweep over every service), `tests/test_engine.cpp` (the whole engine
+against the simulated car: scan with environment and snapshot data, HTML report, replay of the recorded session,
+VIN and part-number detection, routine following, coding write with SecurityAccess 27 03/04, wrong key rejected
+and not retried, KWP 27 01/02 with a 2-byte seed, guided jobs, live data). `tests/mock_j2534.cpp` puts the same
+simulated car behind the real J2534 API (CAN and K-line) so `PorscheTool.exe` is tested end-to-end under Wine.
 
 ## Vehicle coverage (data packs)
 
-Built & verified: **G1** (Panamera 970), **9x1** (911 991 / 981 / 718), **CS1**, **918S**, **992** (911 992,
-ODX 2.2), **Cajun** (Macan), **E2** (Cayenne 92A), **E3** (Cayenne 9Y0). Next: **J1** (Taycan),
-**MIG/9x7/9x6/E1** (997/987, 996/986, Cayenne 955). Each pack ≈ 8k–22k services across 15–96 control units.
-KWP lines (G1/9x1/918) mix UDS+KWP; 992/newer are UDS with 29-bit addressing on many modules.
+All 13 lines: see [COVERAGE.md](COVERAGE.md) (generated by `tools/coverage.py`). Older lines (9x6, E1, part of 9x7)
+are K-line units whose addresses come from the vehicle-information database (`*.vi.db`, `odxdb.logical_links`).
+A line's directory must hold **both** string tables (`AStringData` and `UStringData`); without `UStringData` the
+long names are missing and the parameter parser silently loses most of the requests (this broke the first E3 pack).
 
 ## Seed/key (coding unlock) — see §14 of PDK_TCU_KNOWLEDGE.md
 
@@ -132,18 +157,13 @@ vectors, extract_array.py ports & verifies each family). Full write-up in PDK_TC
   — it holds the unlock constants. Array-hash algorithms are not in it yet.
 - `src/seedkey.h` — loads `porschetool.keys`, computes the key (`((seed^K)*A+B) mod 2^8nb`, or a table lookup).
   Verified byte-for-byte against the Python reference for keyed-multiply, and against the dumped tables.
-- `src/porschetool.cpp` — `securityUnlock()` runs 0x27 (request seed at the coding level, else the generic
-  level; compute; send key) and is called automatically before a bit-8 coding write and on an NRC 0x33 retry.
-  All 36 mapped modules unlock. Without the key file the app still does everything except coding writes.
-  The seed/key maths (all seven families) is verified byte-for-byte against the PIWIS jar vectors in `seedkey.h`
-  (native `skvec` harness, 960 vectors); the on-car 0x27 request/response exchange itself is pending a
-  mock/real-car confirmation (as with the earlier PdkTool).
+- `src/engine.h` — `securityUnlock()` runs 0x27 at the coding level the pack gives for the unit (`sa`: request-seed
+  sub-function and seed length from the database), computes the key and sends it. It is called before a bit-8
+  coding write and on an NRC 0x33. Nothing is sent without a mapped algorithm, with an unexpected seed length or
+  without the key file; a rejected key is reported and never retried. The exchange is verified against the
+  simulated control units (UDS 4-byte seed at 27 03/04, KWP2000 2-byte seed at 27 01/02, wrong key, attempt
+  counter); the real-car confirmation is on the roadmap. SFD lines: see [SFD.md](SFD.md).
 
 ## TODO (next sessions)
 
-1. Build packs for the remaining lines (Cajun, E2, E3, J1, 9x7/9x6/E1).
-2. Confirm the 0x27 seed/key exchange against the mock / a real car (the key maths is already verified); extend
-   the module→algorithm map beyond the 36 high-confidence entries as more are confirmed.
-3. Publish `porsche-tool` as a public repo (banner, README, release) — same redaction rules as pdk-3000-tool.
-4. Freeze-frame / environment data decoding for UDS DTCs (SDG files hold the system reaction per fault).
-5. Per-module safety notes for the risky write/actuator functions.
+See [ROADMAP.md](../ROADMAP.md).

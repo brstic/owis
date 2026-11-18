@@ -123,6 +123,8 @@ class Ecu:
                     sd = u32(r, 49) if r[47:49] == b"\x01\x1b" else 0
                     self.rows[sn].append((int(key) if key.lstrip("-").isdigit() else key, sd, self.n(u32(r, 25))))
         self._dop = {}
+        # object IDs of the control unit itself (tag 0x5C records): what a logical link refers to
+        self.ecu_ids = {u32(r, 2) for r in self.recs[:self.own] if r[0] == 0x5C and len(r) >= 6}
 
     def n(self, h): return self.s.get(h, "")
 
@@ -137,10 +139,15 @@ class Ecu:
                 k = r[i+32] if i + 32 < len(r) else 0
                 p["kind"] = k
                 if k == 0x27:                                   # CODED-CONST: 27 <vtype> <value>
-                    vt = r[i+33]
-                    p["const"] = u32(r, i+34) if vt == 0x0B else (f64(r, i+34) if vt == 0x05 else r[i+34])
+                    vt = r[i+33]; skip = 0
+                    if vt == 0x02 and r[i+34] == 1:              # bit string "0101" (reserved bits, flags): 01 <len u16> <chars>
+                        n = struct.unpack_from("<H", r, i+35)[0]; bs = r[i+37:i+37+n]
+                        p["const"] = int(bs.decode("ascii"), 2) if n and all(c in b"01" for c in bs) and n <= 64 else 0
+                        p["bits"] = n; skip = n
+                    else:
+                        p["const"] = u32(r, i+34) if vt == 0x0B else (f64(r, i+34) if vt == 0x05 else r[i+34])
                     p["semantic"] = self.n(u32(r, i+42)) if self.n(u32(r, i+42)) else ""
-                    j = r.find(b"\x01\x23\x00", i+40, i+80)
+                    j = r.find(b"\x01\x23\x00", i+37+skip if skip else i+40, i+80+skip)
                     if j > 0 and r[j+3] == 2: p["bits"] = u32(r, j+4)
                 else:
                     p["semantic"] = self.n(u32(r, i+37))
@@ -166,6 +173,10 @@ class Ecu:
         if off is not None:
             r = self.at.get(off); sn = self.dir.get(h)
             if r is not None and (tags is None or r[0] in tags) and (sn is None or struct.pack("<I", sn) in r[:80]):
+                return r
+            # ODX 2.2 field records (END-OF-PDU-FIELD ...) are short and carry only the item reference, not
+            # their own short name: the B-tree offset is the only way to find them.
+            if r is not None and tags is not None and r[0] in tags and 0x95 <= r[0] <= 0x9B and len(r) < 40:
                 return r
         for hh in (h, self.dir.get(h)):
             if hh is None: continue
@@ -193,7 +204,7 @@ class Ecu:
         if depth > 6: return d
         for p in self.params(r, 26):
             f = {"sn": p["sn"], "ln": p["ln"], "byte": p["byte"], "bit": p["bit"]}
-            if "const" in p: f["const"] = p["const"]
+            if "const" in p: f["const"] = p["const"]; f["bits"] = p.get("bits", 8)
             if "dop" in p and p["dop"]: f["dop"] = self.dop(p["dop"], depth + 1)
             d["fields"].append(f)
         return d
@@ -266,6 +277,9 @@ class Ecu:
                 if vt == 0x0B: lims.append(u32(blk, q + 1))
                 elif vt == 0x05: lims.append(f64(blk, q + 1))
                 elif vt == 0x0A: lims.append(struct.unpack_from("<i", blk, q + 1)[0] if q + 5 <= len(blk) else 0)
+                elif vt == 0x03 and q + 4 <= len(blk) and blk[q + 1] == 1:        # byte field: 03 01 <len u16> <bytes>
+                    n = struct.unpack_from("<H", blk, q + 2)[0]
+                    if 0 < n <= 8 and q + 4 + n <= len(blk): lims.append(int.from_bytes(blk[q + 4:q + 4 + n], "big"))
             if len(lims) >= 2: sc["lo"], sc["hi"] = lims[-2], lims[-1]
             elif len(lims) == 1: sc["lo"] = sc["hi"] = lims[0]
             if sc: out.append(sc)
@@ -325,8 +339,12 @@ class Ecu:
         out = []; seen = set()
         for r in self.recs[:self.own]:
             if r[0] != 0xBE: continue
-            names = [(q, self.n(u32(r, q))) for q in range(30, len(r) - 3) if self.n(u32(r, q))]
-            ln = self.n(u32(r, 47)); sn = self.n(u32(r, 51))
+            names = [(q, self.n(u32(r, q))) for q in range(24, len(r) - 3) if self.n(u32(r, q))]
+            # The record layout differs between database generations, but the long and short name always
+            # sit right in front of the request reference: ... | LONG-NAME | SHORT-NAME | 1 byte | REQ_...
+            qr = next((q for q, v in names if v.startswith("REQ_")), None)
+            if qr is None or qr < 9: continue
+            ln = self.n(u32(r, qr - 9)); sn = self.n(u32(r, qr - 5))
             if not sn or sn in seen: continue
             req = pr = None; sem = fc = ""; sess = []; sec = []
             for k, (q, v) in enumerate(names):
@@ -403,6 +421,18 @@ class Ecu:
                 if txt and disp not in out: out[disp] = txt.strip()
         return out
 
+    def comparams(self):
+        """communication parameters stored with the control unit itself: {CP_ name: [values]}"""
+        res = collections.defaultdict(set)
+        for r in self.recs[:self.own]:
+            for q in range(0, len(r) - 3):
+                v = self.n(u32(r, q))
+                if v.startswith("CP_"):
+                    j = r.find(b"\x8b\x0b", q + 4, q + 40)
+                    if j > 0: res[v].add(u32(r, j + 2))
+                    else: res.setdefault(v, set())
+        return {k: sorted(v) for k, v in res.items()}
+
     def can_ids(self):
         res = collections.defaultdict(set)
         hs = {"req": djb2("CP_CanPhysReqId"), "resp": djb2("CP_CanRespUSDTId")}
@@ -414,6 +444,33 @@ class Ecu:
                     if j > 0: res[k].add(u32(r, j + 2))
                     i = r.find(pk, i + 1)
         return {k: sorted(v) for k, v in res.items()}
+
+def logical_links(proj_dir):
+    """Logical links of the vehicle-information database (*.vi.db): how each control unit is reached.
+    -> {ecu short name: {"proto": protocol stack name, "ln": long name, <CP_ name>: value, ...}}
+    Used for the older lines, where the bus parameters are not stored with the control unit itself."""
+    out = {}; s = load_strtab(proj_dir)
+    for f in sorted(os.listdir(proj_dir)):
+        if not f.endswith(".vi.db"): continue
+        for o, r in streams(os.path.join(proj_dir, f)):
+            if r[0] != 0x6A or len(r) < 60: continue
+            sn = s.get(u32(r, 2), ""); ln = s.get(u32(r, 6), "")
+            if not sn: continue
+            d = {"proto": s.get(u32(r, 38), ""), "ln": ln, "ecu": u32(r, 30)}
+            q = 40
+            while q < len(r) - 8:
+                v = s.get(u32(r, q), "")
+                if v.startswith("CP_") or v.startswith("CPM_"):
+                    last = q
+                    for k in range(q + 4, min(q + 24, len(r) - 4)):          # the name is repeated (short / long name)
+                        if s.get(u32(r, k), "") == v: last = k
+                    j = r.find(b"\x8b\x0b", last + 4, last + 44)
+                    if j > 0 and v not in d: d[v] = u32(r, j + 2)
+                    q = last + 4; continue
+                q += 1
+            e = out.setdefault(sn, d)
+            for k, v in d.items(): e.setdefault(k, v)
+    return out
 
 def ecu_files(proj_dir):
     return sorted(f for f in os.listdir(proj_dir) if f.startswith("0.0.0@") and f.endswith(".bv.db"))
