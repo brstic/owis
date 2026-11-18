@@ -56,17 +56,20 @@ def streams(path):
     return out
 
 def parse_key(path):
-    """.key = B-tree (8 KB pages, prefix-compressed 4-byte keys): object-name hash -> .db offset"""
+    """.key = B-tree file ("Peter's B Tree"), 8 KB pages. Leaf page: byte 0 = 0, 13-byte header, then entries
+    <key len=4> <shared prefix len> <value len> <key suffix> <value>; the value starts with the u32 .db offset.
+    Internal pages (byte 0 = 1) and the file-header page are skipped."""
     if not os.path.exists(path): return {}
     k = open(path, "rb").read(); out = {}
     for pg in range(0, len(k), 8192):
-        page = k[pg:pg + 8192]; i = page.find(b"\x04\x00\x06"); prev = b""
-        if i < 0: continue
+        page = k[pg:pg + 8192]
+        if len(page) < 16 or page[0] != 0 or b"Peter's B Tree" in page[:64]: continue
+        i = 13; prev = b""
         while i + 3 <= len(page):
             kl, sh, vl = page[i], page[i+1], page[i+2]
-            if kl != 4 or sh > 4 or vl not in (4, 6, 8): break
+            if kl != 4 or sh > 4 or vl < 4 or vl > 16: break
             nk = prev[:sh] + page[i+3:i+3+kl-sh]
-            if len(nk) != 4: break
+            if len(nk) != 4 or i + 3 + kl - sh + vl > len(page): break
             out[struct.unpack("<I", nk)[0]] = struct.unpack_from("<I", page, i+3+kl-sh)[0]
             prev = nk; i += 3 + kl - sh + vl
     return out
@@ -116,9 +119,9 @@ class Ecu:
         for r in self.recs:
             if r[0] == 0xAC and len(r) >= 53:
                 key = self.n(u32(r, 2)); sn = self.n(u32(r, 17))
-                if sn and key and key.lstrip("-").isdigit():
+                if sn and key:                                 # key: number (ODX 2.0) or key-DOP text (ODX 2.2)
                     sd = u32(r, 49) if r[47:49] == b"\x01\x1b" else 0
-                    self.rows[sn].append((int(key), sd, self.n(u32(r, 25))))
+                    self.rows[sn].append((int(key) if key.lstrip("-").isdigit() else key, sd, self.n(u32(r, 25))))
         self._dop = {}
 
     def n(self, h): return self.s.get(h, "")
@@ -157,8 +160,13 @@ class Ecu:
 
     # ------------------------------------------------------------- DOPs
     def rec(self, h, tags=None):
-        # NOTE: the .key B-tree (self.km) is not used for lookups: about a quarter of its entries point at the
-        # neighbouring object. Objects are found by short name (record +2) through the 0x31 directories.
+        # The .key B-tree maps object IDs to .db offsets (exact, also where variants share short names).
+        # Sanity check: the record must carry the short name the directory gives for the ID.
+        off = self.km.get(h)
+        if off is not None:
+            r = self.at.get(off); sn = self.dir.get(h)
+            if r is not None and (tags is None or r[0] in tags) and (sn is None or struct.pack("<I", sn) in r[:80]):
+                return r
         for hh in (h, self.dir.get(h)):
             if hh is None: continue
             for r in self.by2.get(hh, []):
@@ -169,29 +177,6 @@ class Ecu:
     def _tab_has(self, t, row):
         n = u32(t, 26)
         return any(self.n(u32(t, 30 + 16 * k + 12)) == row for k in range(min(n, 4096)) if 30 + 16 * k + 16 <= len(t))
-
-    def table_row(self, table, row):
-        """(key, structure DOP hash) of row <row> in table <table> (both short names / IDs)."""
-        h = djb2(table); cands = []
-        for hh in (h, self.dir.get(h)):
-            if hh is not None: cands += self.tabs.get(hh, [])
-        t0 = self.rec(h, (0xAB,))
-        if t0 is not None and all(t0 is not c for c in cands): cands.insert(0, t0)
-        for t in cands:
-            if not self._tab_has(t, row): continue
-            n = u32(t, 26)
-            for k in range(min(n, 4096)):
-                q = 30 + 16 * k
-                if q + 16 > len(t): break
-                if self.n(u32(t, q + 12)) == row:
-                    key = self.n(u32(t, q))
-                    if not key.lstrip("-").isdigit(): break
-                    key = int(key); tn = self.n(u32(t, 6)); tid = "__" + tn.rsplit("__", 1)[-1] + "_" if "__" in tn else tn + "_"
-                    sds = [sd for k, sd, rid in self.rows.get(row, []) if k == key and sd and tid in rid] or \
-                          [sd for k, sd, rid in self.rows.get(row, []) if k == key and sd]
-                    return key, (sds[0] if sds else 0)
-        if self.rows.get(row): return self.rows[row][0][:2]
-        return None
 
     def dop(self, h, depth=0):
         if h in self._dop: return self._dop[h]
@@ -228,7 +213,7 @@ class Ecu:
         i = r.find(b"\x01\x0a\x00")
         cat = r[i+3] if i >= 0 else 0
         d["compu"] = CAT.get(cat, str(cat))
-        j = r.find(b"\x01\x23\x00")
+        j = r.rfind(b"\x01\x23\x00")                   # coded type follows the compu method
         p = r.find(b"\x01\x3c\x00", j if j > 0 else 0)
         if j > 0:
             lt = r[j+3]
@@ -285,6 +270,55 @@ class Ecu:
             elif len(lims) == 1: sc["lo"] = sc["hi"] = lims[0]
             if sc: out.append(sc)
         return out
+
+    def table_keydop(self, t):
+        """key DOP of a table record (last DOP reference in the record), decoded"""
+        for q in range(len(t) - 8, 30, -1):
+            v = self.n(u32(t, q))
+            if v.startswith("DOP_"): return self.dop(u32(t, q))
+        return None
+
+    def key_value(self, key, tables):
+        if isinstance(key, int): return key
+        for t in tables:
+            kd = self.table_keydop(t)
+            for sc in (kd or {}).get("scales", []):
+                if sc.get("text") == key and isinstance(sc.get("lo"), (int, float)): return int(sc["lo"])
+        if not hasattr(self, "_allkeys"):                    # fallback: key texts of every table (incl. libraries)
+            self._allkeys = {}
+            for lst in self.tabs.values():
+                for t in lst:
+                    for sc in (self.table_keydop(t) or {}).get("scales", []):
+                        if sc.get("text") and isinstance(sc.get("lo"), (int, float)): self._allkeys.setdefault(sc["text"], int(sc["lo"]))
+        return self._allkeys.get(key)
+
+    def table_row(self, table, row):
+        """(key value, structure DOP hash) of row <row> in table <table>"""
+        h = djb2(table); cands = []
+        for hh in (h, self.dir.get(h)):
+            if hh is not None: cands += self.tabs.get(hh, [])
+        t0 = self.rec(h, (0xAB,))
+        if t0 is not None and all(t0 is not c for c in cands): cands.insert(0, t0)
+        rows = self.rows.get(row, [])
+        # ODX 2.0 layout: table entries [key][row ref][file][row short name]
+        for t in cands:
+            n = u32(t, 26)
+            for k in range(min(n, 4096)):
+                q = 30 + 16 * k
+                if q + 16 > len(t): break
+                if self.n(u32(t, q + 12)) == row:
+                    key = self.n(u32(t, q))
+                    key = int(key) if key.lstrip("-").isdigit() else self.key_value(key, [t])
+                    if key is None: break
+                    tn = self.n(u32(t, 6)); tid = "__" + tn.rsplit("__", 1)[-1] + "_" if "__" in tn else tn + "_"
+                    sds = [sd for kk, sd, rid in rows if sd and tid in rid] or [sd for kk, sd, rid in rows if sd]
+                    return key, (sds[0] if sds else 0)
+        # ODX 2.2 layout: rows carry a key text resolved through the table's key DOP
+        if rows:
+            key = self.key_value(rows[0][0], cands)
+            sds = [sd for kk, sd, rid in rows if sd]
+            if key is not None: return key, (sds[0] if sds else 0)
+        return None
 
     # ------------------------------------------------------------- services
     def services(self):

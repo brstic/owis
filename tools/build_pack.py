@@ -8,9 +8,10 @@ Pack format (version 1), compact JSON:
          struct   ["t", [[name, byte, bit, dop|-1, const|null], ...]]
          field    ["f", item_dop]                       (repeated structure up to the end of the message)
   mods : {"k":key, "n":name, "ids":[[req,resp],...], "p":proto, "svc":[...], "dtc":[[code,bits,text],...]}
-  svc  : [name, category, semantic, sessions bitmask, request params, response params]
+  svc  : [name, category, semantic, sess_and_flags, request params, response params]
          category: L live data, I identification, A actuator test, R routine, C coding/adaptation read,
                    W coding/adaptation write, O other
+         sess_and_flags: low byte = session bitmask; bit 8 = needs Codierung security unlock
   param: [name, byte, bit, bits, const|null, dop|-1]
 Strings are English (tools/i18n/*.json, keyed by djb2 of the source text). With --lang de the source texts
 are kept (private use only - never publish such a pack).
@@ -32,9 +33,9 @@ def load_tr():
     tr = {}
     d = os.path.join(HERE, "i18n")
     if os.path.isdir(d):
-        for f in sorted(os.listdir(d)):
-            if f.endswith(".json") and not f.startswith("untranslated"):
-                tr.update(json.load(open(os.path.join(d, f), encoding="utf-8")))
+        files = [f for f in os.listdir(d) if f.endswith(".json") and not f.startswith("untranslated")]
+        for f in sorted(files, key=lambda f: (not f.startswith("mt_"), f)):     # machine first, hand-made wins
+            tr.update(json.load(open(os.path.join(d, f), encoding="utf-8")))
     return tr
 
 class Pack:
@@ -124,6 +125,16 @@ EXCLUDE_RE = re.compile(r"(?i)(Wegfahrsperre|Immobili|WFS|Key.?Learn|Schl(ue|ü)
 EXCLUDE_SID = {0x23, 0x27, 0x28, 0x29, 0x34, 0x35, 0x36, 0x37, 0x3D, 0x83, 0x84, 0x85, 0x86, 0x87, 0x10, 0x11, 0x3E,
                0x14, 0x18, 0x19, 0x17, 0x12, 0x13}
 
+SUFFIX_RE = re.compile(r"\s+(Read Data By Identifier|ReadDataByIdentifier|Write Data By Identifier|Request Routine Results|"
+                       r"RequestRoutineResults?|Start Routine|StartRoutine|Stop Routine|StopRoutine|Short Term Adjustment|"
+                       r"Return Control To E[Cc][Uu]|Freeze Current State|ReadDocumentation|WriteDocumentation|Read Read|Read|Write)$")
+
+def svc_name(ln):
+    """service long name without the standard ODX service suffix (the category says what it is)"""
+    n = (ln or "").strip()
+    for _ in range(2): n = SUFFIX_RE.sub("", n)
+    return n or (ln or "")
+
 def category(sem, cls, sid):
     """L live data, I identification, A actuator test, R routine/basic setting, C adaptation/coding read,
     W adaptation/coding write"""
@@ -170,8 +181,9 @@ def build(proj, platform, title, lang="en", progress=print):
                 excluded[0] += 1; continue
             mask = 0
             for x in s["sessions"]: mask |= SESS.get(x, 0)
-            m["svc"].append([pk.S(s["ln"], s["sn"]), category(s.get("semantic"), s.get("class"), sid),
-                             s.get("semantic", ""), mask or 1, pk.params(s["request"]), pk.params(s.get("response"))])
+            sec = 1 if any("Codier" in x or "CODIER" in x for x in s.get("security", [])) else 0
+            m["svc"].append([pk.S(svc_name(s["ln"]), s["sn"]), category(s.get("semantic"), s.get("class"), sid),
+                             s.get("semantic", ""), (mask or 1) | (sec << 8), pk.params(s["request"]), pk.params(s.get("response"))])
         for disp, txt in sorted(dtcs.items()):
             bits, code = code_key(disp)
             if (bits, code) in m["_dtcseen"]: continue
