@@ -1,4 +1,4 @@
-// Minimal JSON reader (DOM) for PorscheTool data packs. No dependencies, any OS.
+// Minimal JSON reader (DOM) for OWIS data packs. No dependencies, any OS.
 #pragma once
 #include <cstdint>
 #include <cstdlib>

@@ -1,14 +1,14 @@
 # build output
-PorscheTool.exe
+OWIS.exe
 tests/test_core
 tests/test_pack
 *.dll
 # scan reports (may contain VINs)
-PorscheTool_*.txt
+OWIS_*.txt
 # local PIWIS-derived working data - never commit
 data/
 # Codierung key file and seed/key constants - LOCAL ONLY, hold unlock keys, never commit
-porschetool.keys
+owis.keys
 *.keys
 tools/seedkey/*catalog*.json
 tools/seedkey/kmul.json
@@ -19,5 +19,6 @@ __pycache__/
 .DS_Store
 # build output, reports, traces, live-data logs (may contain VINs)
 build/
-PorscheTool_*
+OWIS_*
 *.ptrace
+*.exe

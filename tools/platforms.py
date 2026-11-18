@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vehicle lines PorscheTool builds data packs for.
+"""Vehicle lines OWIS builds data packs for.
 
 id      : pack id / file name (data/<id>.json)
 dir     : sub-directory below the PIWIS "Projects-V" folder

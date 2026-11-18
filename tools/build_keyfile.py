@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the local Codierung key file that PorscheTool loads to unlock coding writes.
+"""Generate the local Codierung key file that OWIS loads to unlock coding writes.
 
 Reads the local seed/key catalogue (and the dumped rotate tables) produced from your own PIWIS
-install and writes a single binary `porschetool.keys` next to the executable. This file holds the
+install and writes a single binary `owis.keys` next to the executable. This file holds the
 unlock constants: it is LOCAL ONLY and must never be committed or published (it is in .gitignore).
 
 Without this file the app still reads faults, live data, runs routines and actuator tests; only
@@ -55,7 +55,7 @@ def load_table(seedkey_dir, name, nb):
 
 def main():
     seedkey_dir = os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else os.path.expanduser("~/Projects/porsche/seedkey")
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "porschetool.keys")
+    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "owis.keys")
     cat = json.load(open(os.path.join(seedkey_dir, "seedkey_catalog.json")))
 
     entries = []
@@ -74,7 +74,7 @@ def main():
         else:  # array - emitted from array_ported.json below if ported
             skipped.append((name, "array-hash not ported"))
 
-    # ported array-hash algorithms (verified against the jar vectors; see extract_array.py)
+    # ported array-hash algorithms (verified against their own seed->key vectors before shipping)
     ap_path = os.path.join(seedkey_dir, "array_ported.json")
     ported = json.load(open(ap_path)) if os.path.exists(ap_path) else {}
     skipped = [s for s in skipped if s[0] not in ported]

@@ -1,4 +1,4 @@
-// Codierung seed/key: loads the local key file (porschetool.keys) and computes the unlock key from a
+// Codierung seed/key: loads the local key file (owis.keys) and computes the unlock key from a
 // seed. The key file holds the unlock constants and is generated from a local PIWIS install
 // (tools/build_keyfile.py); it is never shipped. Without it, coding writes are simply unavailable.
 //
@@ -31,7 +31,7 @@ struct Key {
 inline std::map<std::string, Key> &keys() { static std::map<std::string, Key> k; return k; }
 inline bool &loaded() { static bool l = false; return l; }
 
-// Load porschetool.keys. Returns the number of algorithms loaded (0 if the file is absent/invalid).
+// Load owis.keys. Returns the number of algorithms loaded (0 if the file is absent/invalid).
 inline int load(const std::string &path) {
     keys().clear(); loaded() = false;
     FILE *f = fopen(path.c_str(), "rb");

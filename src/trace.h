@@ -1,7 +1,7 @@
 // Session record / replay. Every request and response of a session is written to a small text file; the
 // same file can be replayed later as if the car were connected - for diagnosis after the car has left and
 // for testing without a car.
-//   # PorscheTool trace v1
+//   # OWIS trace v1
 //   @ <tx id hex> <rx id hex> <link>        a control unit was selected
 //   T <hex bytes>                           request sent
 //   R <hex bytes>                           response received
@@ -16,7 +16,7 @@ class TraceWriter {
     FILE *f = nullptr; uint32_t lastTx = 0xFFFFFFFFu, lastRx = 0; int lastKind = -1;
 public:
     ~TraceWriter() { close(); }
-    bool open(const std::string &path) { close(); f = fopen(path.c_str(), "a"); if (f) fprintf(f, "# PorscheTool trace v1\n"); lastTx = 0xFFFFFFFFu; return f != nullptr; }
+    bool open(const std::string &path) { close(); f = fopen(path.c_str(), "a"); if (f) fprintf(f, "# OWIS trace v1\n"); lastTx = 0xFFFFFFFFu; return f != nullptr; }
     void close() { if (f) { fclose(f); f = nullptr; } }
     bool active() const { return f != nullptr; }
     void attach(Bus &b) {

@@ -1,8 +1,8 @@
-# PorscheTool roadmap
+# OWIS roadmap
 
 ## Goal
 
-**PorscheTool must be a complete replacement for the Porsche dealer tester (PIWIS).** Free and open source, for
+**OWIS must be a complete replacement for the Porsche dealer tester (PIWIS).** Free and open source, for
 independent workshops and owners — right to repair. Everything a workshop does with PIWIS on a car — read and
 clear faults with their environment data, live data, identification, actuator tests, routines and basic settings,
 adaptation and coding, and the guided service procedures — on every control unit of every Porsche line, over a cheap
@@ -36,7 +36,7 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
 
 ### 1. On-car confirmation (needs a car / bench)
 - [ ] Spot-check each line's CAN ids and a few services against a real car or a known-good log (a recorded session
-      from the app is enough: `PorscheTool_trace_*.ptrace`).
+      from the app is enough: `OWIS_trace_*.ptrace`).
 - [ ] Confirm the `0x27` exchange on real control units (protocol plumbing is verified on the simulator, the key
       maths against the PIWIS vectors) — PASM / cluster (UDS) and PDK (KWP2000) first.
 - [ ] Confirm the K-line init and timing on a 996/986 and a Cayenne 955.
@@ -74,10 +74,11 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
 - Ongoing: wrong translations reported by users are fixed in `tools/i18n/*.json`.
 
 ### 6. Distribution
-- [x] macOS and Linux: `porschetool-cli --slcan <port>` for serial CAN adapters (CANable, CANtact, USBtin ...), with
+- [x] macOS and Linux: `owis-cli --slcan <port>` for serial CAN adapters (CANable, CANtact, USBtin ...), with
       ISO-TP and TP 2.0 in user space; Linux also `--can <iface>` (SocketCAN). Tested through a pseudo-terminal.
-- [x] Published: https://github.com/brstic/porsche-tool — banner, README, release v0.5 with `PorscheTool.exe`, the macOS
-      CLI and the English packs (no original database texts, VINs or unlock constants).
+- [x] Published: https://github.com/brstic/owis — banner, README, release v0.5 with `OWIS.exe` and the macOS CLI.
+      Vehicle data and the coding key file are built locally from the user's own installation; OWIS ships no
+      original database texts, VINs or unlock constants, and no tooling to extract them.
 
 ## Limits that are not ours to lift
 - 992 / Taycan / 9Y0 / 971: their databases name no offline coding algorithm - coding there needs SFD (below).

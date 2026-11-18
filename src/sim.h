@@ -1,4 +1,4 @@
-// Simulated Panamera (970) for testing PorscheTool without a car. Portable: used by the native tests and
+// Simulated Panamera (970) for testing OWIS without a car. Portable: used by the native tests and
 // the --demo mode through SimBus, and by the mock J2534 DLL (tests/mock_j2534.cpp) under Wine.
 //
 // Simulated control units (request/response CAN id):

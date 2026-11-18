@@ -1,9 +1,9 @@
-// porschetool-cli: the PorscheTool engine on the command line, for Linux and macOS (and scripts).
+// owis-cli: the OWIS engine on the command line, for Linux and macOS (and scripts).
 // Same engine, data packs and safety rules as the Windows app.
 //   Linux : any SocketCAN interface (--can can0)
 //   macOS / Linux: SLCAN serial CAN adapters - CANable, CANtact, USBtin ... (--slcan /dev/cu.usbmodem1101)
 //   any OS: --demo (simulated car) and --replay <trace> (a session recorded by the Windows app or by --record)
-// Build:  c++ -std=c++17 -O2 -Isrc src/cli.cpp -o porschetool-cli       License: MIT.
+// Build:  c++ -std=c++17 -O2 -Isrc src/cli.cpp -o owis-cli       License: MIT.
 #include "engine.h"
 #include "sim.h"
 #include "trace.h"
@@ -16,8 +16,8 @@
 using namespace pt;
 
 static void usage() {
-    printf("PorscheTool %s - command line\n\n"
-           "porschetool-cli [options] <command>\n\n"
+    printf("OWIS %s - command line\n\n"
+           "owis-cli [options] <command>\n\n"
            "Connection (one of):\n"
            "  --can <iface>      Linux SocketCAN interface, e.g. can0 (500 kbit/s, ISO-TP in the kernel)\n"
            "  --slcan <port>     serial CAN adapter (CANable, CANtact, USBtin ...), macOS or Linux,\n"
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
     }
     if (bus) {
         bus->onError = [](const std::string &s) { fprintf(stderr, "%s\n", s.c_str()); };
-        if (!demo && replay.empty()) sk::load("porschetool.keys");
+        if (!demo && replay.empty()) sk::load("owis.keys");
         if (!record.empty() && tw.open(record)) tw.attach(*bus);
         if (!bus->open()) return 1;
     }

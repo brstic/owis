@@ -1,7 +1,7 @@
 // Mock J2534 PassThru DLL (op20pt32.dll): the simulated car of src/sim.h behind the real J2534 API, so
-// PorscheTool.exe can be tested end-to-end without a car or an adapter (e.g. under Wine):
+// OWIS.exe can be tested end-to-end without a car or an adapter (e.g. under Wine):
 //   i686-w64-mingw32-g++ -shared -static -O2 -Isrc tests/mock_j2534.cpp -o op20pt32.dll -Wl,--kill-at
-// Put op20pt32.dll next to PorscheTool.exe (on a PC without a registered J2534 driver).
+// Put op20pt32.dll next to OWIS.exe (on a PC without a registered J2534 driver).
 // Channel 1 = ISO 15765 (CAN), channel 2 = ISO 14230 (K-line, fast and 5-baud init), channel 3 = raw CAN
 // (VW TP 2.0 units behind the gateway, simulated frame by frame). See sim.h for the units.
 #include <windows.h>

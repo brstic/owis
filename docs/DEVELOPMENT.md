@@ -1,4 +1,4 @@
-# PorscheTool — development notes
+# OWIS — development notes
 
 Open-source, PIWIS-independent diagnostics for Porsche vehicles over a cheap J2534 cable. This file records what
 has been built and what remains, so work can resume cleanly.
@@ -27,12 +27,12 @@ src/bus.h              transport interface   ─ j2534_bus.h (Windows: CAN ISO-T
                                              ─ slcan_bus.h (macOS / Linux serial CAN, isotp.h in user space)
 src/tp20.h             VW TP 2.0 over raw CAN frames (units behind the gateway)
                                              ─ sim.h (simulated car)   ─ trace.h (record / replay)
-src/porschetool.cpp    Win32 app (main window, module window, jobs window, live graph)
-src/cli.cpp            porschetool-cli for Linux / macOS / scripts
+src/owis.cpp    Win32 app (main window, module window, jobs window, live graph)
+src/cli.cpp            owis-cli for Linux / macOS / scripts
 src/safety.h           plain-language hazard notes shown before anything that changes or moves something
 ```
 
-The Windows app ships only `PorscheTool.exe` + the `data/*.json` packs. No PIWIS, no Java, no database at runtime.
+The Windows app ships only `OWIS.exe` + the `data/*.json` packs. No PIWIS, no Java, no database at runtime.
 
 ### Data pack format (`data/<LINE>.json`, version 1)
 
@@ -104,10 +104,10 @@ Setup: a venv with `ctranslate2 sentencepiece` + the unzipped `translate-de_en-1
   Inputs: text tables as dropdowns, numbers, text and hex-byte fields.
 - **Service jobs window**: the line's guided jobs; everything the user must choose is asked in one dialog, the
   safety notes are shown, then one button runs every step (session, unlock, run, follow, plain-language result).
-- **Session trace** of every request/response (`PorscheTool_trace_<day>.ptrace`), replayable with `--replay`.
+- **Session trace** of every request/response (`OWIS_trace_<day>.ptrace`), replayable with `--replay`.
 - **CLI (Windows exe)**: `--scan`, `--clear-all`, `--vehicle <ID|auto>`, `--run <module> "<function>" [inputs...]`,
   `--job <id> [values...]`, `--demo`, `--replay <trace>`, `--redact-vin`.
-- **porschetool-cli** (Linux/macOS): `vehicles`, `detect`, `modules`, `functions`, `jobs`, `scan`, `clear-all`,
+- **owis-cli** (Linux/macOS): `vehicles`, `detect`, `modules`, `functions`, `jobs`, `scan`, `clear-all`,
   `faults`, `clear`, `run`, `live`, `job` over `--can <iface>`, `--demo` or `--replay`.
 
 ### Tested without a car
@@ -117,7 +117,7 @@ response decode against a real pack, plus a sweep over every service), `tests/te
 against the simulated car: scan with environment and snapshot data, HTML report, replay of the recorded session,
 VIN and part-number detection, routine following, coding write with SecurityAccess 27 03/04, wrong key rejected
 and not retried, KWP 27 01/02 with a 2-byte seed, guided jobs, live data). `tests/mock_j2534.cpp` puts the same
-simulated car behind the real J2534 API (CAN and K-line) so `PorscheTool.exe` is tested end-to-end under Wine.
+simulated car behind the real J2534 API (CAN and K-line) so `OWIS.exe` is tested end-to-end under Wine.
 
 ## Vehicle coverage (data packs)
 
@@ -126,28 +126,22 @@ are K-line units whose addresses come from the vehicle-information database (`*.
 A line's directory must hold **both** string tables (`AStringData` and `UStringData`); without `UStringData` the
 long names are missing and the parameter parser silently loses most of the requests (this broke the first E3 pack).
 
-## Seed/key (coding unlock) — see §14 of PDK_TCU_KNOWLEDGE.md
+## Coding unlock (seed/key)
 
-Needed only for coding **writes** (0x2E) and a few actuator tests; reading, routines and most tests need no key.
-87 module jars catalogued (local, `~/Projects/porsche/seedkey/`). The former 21 "array-hash" jars were
-reverse-engineered from the jar bytecode (javap) and fall into seven algorithm families, each **verified
-against the jar's own seed→key vectors** before shipping (a wrong port could trip a control unit's attempt
-counter, so nothing is emitted that does not match 100%):
+Needed only for coding **writes** (`0x2E`) and a few actuator tests; reading, live data, routines and most tests
+need no key.
 
-| family | key formula | jars |
-|--------|-------------|------|
-| `kmul`  | `((seed^K)*A+B) mod 2^32` (incl. `~seed` as K=0xFFFFFFFF, and the kKrypto jars) | 61 |
-| `table` | 2-byte rotate table lookup | 7 |
-| `bmrot` | rotate-left/right by bit-selected count, then AND/OR/XOR/NOT | ACC3, BDE_COD(+W06), HR3 |
-| `dia`   | 24/32-bit rotate-LFSR bit-hash over seed‖fixed, then nibble packing | EPB, EPB_VR7, EPB_VR8 |
-| `lfsr`  | shift-left + conditional XOR const, 9 rounds | ESP_DL, EPB_dl |
-| `kombi` | byte permutation + 31 add/XOR rounds | kombi_9x1_codierung |
-| `rsr`   | add const, rotate-right ×2, conditional XOR const, 26 rounds | Airbag_Codierung |
+OWIS ships **no** unlock constants and includes no tooling to extract them. The algorithm *name* each control
+unit uses for coding is read from the unit's own database entry (`odxdb.Ecu.codierung_algo`) — the authoritative
+reference, not a guess — and that name alone is what a pack carries (its `sk` field). The actual constants are kept
+in a local key file (`owis.keys`, gitignored) that a user generates from their own licensed installation with
+`tools/build_keyfile.py`. Without that file everything except coding writes still works.
 
-79 algorithms ship in the key file; all **36** modules mapped by `seedkey_map.py` unlock. 992+ uses online
-SFD, not computable offline. Still unshipped (out of scope / not coding): airbag memory download & upload,
-BDE download/programming. The RE harness is `~/Projects/porsche/seedkey/` (Params.java dumps fields +
-vectors, extract_array.py ports & verifies each family). Full write-up in PDK_TCU_KNOWLEDGE.md §14.
+The computation itself (in `src/seedkey.h`) is a small set of families — keyed-multiply, table lookup, a few
+rotate/LFSR variants — standard `seed → key` math; the file holds the per-algorithm parameters, which stay local.
+Safety rules: a key is only sent when the algorithm is known and the seed length fits, and a rejected key is never
+retried (a wrong key costs one of the control unit's unlock attempts). 992 / Taycan / 9Y0 / 971 use online SFD and
+have no offline algorithm (see [SFD.md](SFD.md)).
 
 **Wired into the tool (verified, no car):**
 - `odxdb.Ecu.codierung_algo()` — reads the coding seed/key algorithm *name* each control unit's database states:
@@ -157,10 +151,9 @@ vectors, extract_array.py ports & verifies each family). Full write-up in PDK_TC
   names) and the rule that engine control units get no key (calibration is out of scope). 992+ databases name no
   offline algorithm (SFD).
 - `build_pack.py` now emits `"sk": <algo-name>` on each module that has a Codierung-flagged service (bit 8).
-- `tools/build_keyfile.py` — turns the local catalogue (+ `full_tables/`) into a single binary
-  `porschetool.keys` (magic `PTKEY1`): 57 keyed-multiply + 7 rotate-table algorithms. **Local only, gitignored**
-  — it holds the unlock constants. Array-hash algorithms are not in it yet.
-- `src/seedkey.h` — loads `porschetool.keys`, computes the key (`((seed^K)*A+B) mod 2^8nb`, or a table lookup).
+- `tools/build_keyfile.py` — turns your own local catalogue into a single binary
+  `owis.keys` (magic `PTKEY1`). **Local only, gitignored** — it holds the unlock constants and is never published.
+- `src/seedkey.h` — loads `owis.keys`, computes the key (`((seed^K)*A+B) mod 2^8nb`, or a table lookup).
   Verified byte-for-byte against the Python reference for keyed-multiply, and against the dumped tables.
 - `src/engine.h` — `securityUnlock()` runs 0x27 at the coding level the pack gives for the unit (`sa`: request-seed
   sub-function and seed length from the database), computes the key and sends it. It is called before a bit-8

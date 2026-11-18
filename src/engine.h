@@ -1,7 +1,7 @@
-// PorscheTool engine: everything the tool does with a car, independent of the user interface and of
+// OWIS engine: everything the tool does with a car, independent of the user interface and of
 // the adapter. Fault memory of all control units (with environment data), module functions driven by the
 // data pack, coding unlock, guided jobs, vehicle detection and reports.
-// Portable C++17 - the Windows app (porschetool.cpp) and the command-line tool (cli.cpp) both sit on top,
+// Portable C++17 - the Windows app (owis.cpp) and the command-line tool (cli.cpp) both sit on top,
 // and tests/test_engine.cpp runs all of it against the simulated car.
 #pragma once
 #include "diag_core.h"
@@ -299,7 +299,7 @@ public:
     FILE *report = nullptr;
     void rep(const std::string &s) { log(s); if (report) fprintf(report, "%s\r\n", s.c_str()); }
     std::string openReport(const char *what) {
-        std::string path = reportDir + "/PorscheTool_" + what + "_" + stampNow() + ".txt";
+        std::string path = reportDir + "/OWIS_" + what + "_" + stampNow() + ".txt";
         report = fopen(path.c_str(), "wb");
         if (report) log("Report: " + path);
         return report ? path : "";
@@ -327,7 +327,7 @@ public:
                    "</style></head><body>\n");
         fprintf(f, "<h1>Vehicle scan report</h1><div class=\"mut\">%s", htmlEsc(pack.title).c_str());
         if (!vin.empty()) fprintf(f, " &middot; VIN <code>%s</code>", htmlEsc(vinShown()).c_str());
-        fprintf(f, " &middot; %s &middot; PorscheTool %s</div>\n", date.c_str(), PT_VERSION);
+        fprintf(f, " &middot; %s &middot; OWIS %s</div>\n", date.c_str(), PT_VERSION);
         fprintf(f, "<div class=\"sum\"><div><b>%d</b>control units answering</div><div><b class=\"%s\">%d</b>fault(s) stored</div><div><b>%d</b>not answering</div></div>\n",
                 found, faults ? "bad" : "ok", faults, (int)scan.size() - found);
         fprintf(f, "<h2>Control units with faults</h2>\n");
@@ -575,7 +575,7 @@ public:
         const sk::Key *k = sk::find(m.sk);
         if (!k) {
             why = sk::loaded() ? ("algorithm " + m.sk + " is not in the key file")
-                               : "key file porschetool.keys not found - coding writes disabled";
+                               : "key file owis.keys not found - coding writes disabled";
             return false;
         }
         if (m.saBytes && m.saBytes != k->nb) { why = "key length of " + m.sk + " does not fit this control unit - not sending a key"; return false; }

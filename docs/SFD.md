@@ -1,6 +1,6 @@
 # Coding unlock: what works offline and what does not
 
-PorscheTool needs a security unlock only for **coding / adaptation writes** and a few actuator tests. Reading
+OWIS needs a security unlock only for **coding / adaptation writes** and a few actuator tests. Reading
 fault memory, clearing it, live data, identification, most actuator tests and routines need no unlock on any
 generation.
 
@@ -15,7 +15,7 @@ UDS / KWP2000 *SecurityAccess* exchange (service `0x27`):
 3. sends the key (`27 04` / `27 02`). The unit answers `67 ..` and accepts the write.
 
 The algorithms and their constants are **not** part of this repository or of the data packs. They are read from a
-local key file (`porschetool.keys`) that you generate from your own diagnostic installation with
+local key file (`owis.keys`) that you generate from your own diagnostic installation with
 `tools/build_keyfile.py`. Without the key file everything except coding writes still works.
 
 Safety rules built into the tool — a wrong key costs one of the unit's unlock attempts and can lock it for a while:
@@ -32,7 +32,7 @@ diagnostic protection): the control unit issues a challenge, and the unlock toke
 manufacturer's server** for that one car and session. There is no local algorithm to compute — this is by design
 and no offline tool can do it.
 
-What that means in PorscheTool:
+What that means in OWIS:
 
 - Units whose database defines the SFD routines (`…protection_of_vehicle_diagnosis`, service `0x29`) are marked
   per unit (`sfd` in the module); those routines themselves are not offered. In addition the whole line is marked
@@ -46,4 +46,4 @@ What that means in PorscheTool:
   brake bleeding, parking-brake pad change ...).
 
 Access to SFD is a matter between the vehicle owner or workshop and the manufacturer (independent-operator
-programmes exist for this). PorscheTool does not implement the online exchange and does not try to get around it.
+programmes exist for this). OWIS does not implement the online exchange and does not try to get around it.

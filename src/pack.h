@@ -1,4 +1,4 @@
-// PorscheTool data pack: loading, request building and response decoding (ODX semantics).
+// OWIS data pack: loading, request building and response decoding (ODX semantics).
 // Pure C++ (no Windows) so it is unit-tested on any OS against real packs.
 #pragma once
 #include "json.h"

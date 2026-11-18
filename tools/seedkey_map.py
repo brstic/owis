@@ -66,7 +66,7 @@ ALIAS = {
 # likewise. Everything else is now read straight from the database (ox.Ecu.codierung_algo), which is
 # authoritative - it is the algorithm PIWIS itself calls - so no module is mapped on a guess.
 # Engine control units are deliberately left without a coding key: calibration / emissions-relevant engine
-# changes are out of scope for PorscheTool, so their writes are never unlocked (reading, live data, routines
+# changes are out of scope for OWIS, so their writes are never unlocked (reading, live data, routines
 # and fault memory are unaffected).
 import re as _re
 NO_UNLOCK = _re.compile(r"(?i)ECM|DME|BDE|MED\d|SIMOS|EDC\d|EnginContr|Motorsteuer|_bde$|sdi41|med91")

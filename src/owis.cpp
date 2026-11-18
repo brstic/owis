@@ -1,5 +1,5 @@
 // ============================================================================
-//  PorscheTool (Windows) - open-source diagnostics for Porsche vehicles
+//  OWIS (Windows) - open-source diagnostics for Porsche vehicles
 //  Every control unit: fault memory with environment data, live data (with graph), identification,
 //  actuator tests, routines / basic settings, adaptation and coding, plus guided one-click service jobs.
 //  Driven by a data pack per vehicle line (data/<LINE>.json); the vehicle is recognised from its VIN.
@@ -29,7 +29,7 @@
 #include "sim.h"
 #include "trace.h"
 
-#define APP_TITLE "PorscheTool " PT_VERSION " - open-source Porsche diagnostics"
+#define APP_TITLE "OWIS " PT_VERSION " - Open Workshop Information System (free diagnostics for Porsche)"
 using pt::Engine; using pt::Entry;
 
 // ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ static void graphReset() {
 }
 static void graphPush(const std::string &fn, const std::vector<pk::Value> &vals) {
     if (!g_liveCsv) {                                    // every live session is also written to a CSV file
-        std::string p = exeDir() + "\\PorscheTool_live_" + pt::stampNow() + ".csv";
+        std::string p = exeDir() + "\\OWIS_live_" + pt::stampNow() + ".csv";
         g_liveCsv = fopen(p.c_str(), "w"); g_liveT0 = GetTickCount();
         if (g_liveCsv) fprintf(g_liveCsv, "ms;function;value;number;unit\n");
     }
@@ -171,7 +171,7 @@ static LRESULT CALLBACK GraphProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
     return DefWindowProcA(h, msg, w, l);
 }
 static void openGraph() {
-    if (!g_hGraph) g_hGraph = CreateWindowA("PTGraph", "Live data graph - PorscheTool", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 940, 80, 640, 460, 0, 0, 0, 0);
+    if (!g_hGraph) g_hGraph = CreateWindowA("PTGraph", "Live data graph - OWIS", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 940, 80, 640, 460, 0, 0, 0, 0);
     SetForegroundWindow(g_hGraph);
 }
 
@@ -265,7 +265,7 @@ static bool askInputs(HWND owner, const pk::Service &s, const std::string &title
 // ---------------------------------------------------------------------------
 // worker thread: one action at a time, each on a freshly opened adapter
 // ---------------------------------------------------------------------------
-enum { ID_SCAN = 2001, ID_CLEARALL, ID_OPENMOD, ID_READMOD, ID_CLEARMOD, ID_STOP, ID_DETECT, ID_AUTOVEH, ID_JOBS, ID_REPORT, IDC_VEH, IDC_MOD, IDC_LOG, IDC_REDACT,
+enum { ID_SCAN = 2001, ID_CLEARALL, ID_OPENMOD, ID_READMOD, ID_CLEARMOD, ID_STOP, ID_DETECT, ID_AUTOVEH, ID_JOBS, ID_REPORT, ID_GETDATA, IDC_VEH, IDC_MOD, IDC_LOG, IDC_REDACT,
        ID_M_RUN = 2101, ID_M_LIVE, ID_M_STOP, ID_M_FAULTS, ID_M_CLEAR, ID_M_GRAPH, IDC_M_CAT, IDC_M_SEARCH, IDC_M_LIST, IDC_M_OUT,
        ID_J_RUN = 2201, ID_J_STOP, IDC_J_LIST, IDC_J_DESC, IDC_J_OUT,
        JOB_MOD_RUN = 3001, JOB_MOD_LIVE, JOB_MOD_FAULTS, JOB_MOD_CLEAR, JOB_GUIDED };
@@ -408,9 +408,9 @@ static LRESULT CALLBACK ModProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
                 Job j; j.id = JOB_MOD_CLEAR; j.mod = g_en.curMod; j.outWnd = g_hOut; startJob(j); }
             return 0; }
         if (id == ID_M_RUN || id == ID_M_LIVE || (id == IDC_M_LIST && HIWORD(w) == LBN_DBLCLK)) {
-            if (g_busy) { MessageBoxA(h, "Another action is still running. Press STOP first.", "PorscheTool", MB_OK); return 0; }
+            if (g_busy) { MessageBoxA(h, "Another action is still running. Press STOP first.", "OWIS", MB_OK); return 0; }
             int cnt = (int)SendMessageA(g_hList, LB_GETSELCOUNT, 0, 0);
-            if (cnt <= 0) { MessageBoxA(h, "Choose a function in the list first.", "PorscheTool", MB_OK); return 0; }
+            if (cnt <= 0) { MessageBoxA(h, "Choose a function in the list first.", "OWIS", MB_OK); return 0; }
             std::vector<int> items(cnt); SendMessageA(g_hList, LB_GETSELITEMS, cnt, (LPARAM)items.data());
             Job j; j.mod = g_en.curMod; j.outWnd = g_hOut;
             for (int it : items) if (it >= 0 && it < (int)g_shown.size()) j.sel.push_back(g_shown[it]);
@@ -418,7 +418,7 @@ static LRESULT CALLBACK ModProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             const pk::Module &m = g_en.pack.mods[g_en.curMod];
             if (id == ID_M_LIVE) {
                 for (int ei : j.sel) { char c = g_en.entries[ei].cat; if (c == 'R' || c == 'A' || c == 'W') {
-                    MessageBoxA(h, "LIVE repeats read functions only. For a routine, actuator test or write use RUN.", "PorscheTool", MB_OK); return 0; } }
+                    MessageBoxA(h, "LIVE repeats read functions only. For a routine, actuator test or write use RUN.", "OWIS", MB_OK); return 0; } }
                 if (j.sel.size() == 1 && !askInputs(h, m.svc[g_en.entries[j.sel[0]].main], g_en.entries[j.sel[0]].name, j.in)) return 0;
                 SetWindowTextA(g_hOut, ""); j.id = JOB_MOD_LIVE; startJob(j); return 0;
             }
@@ -443,7 +443,7 @@ static void openModuleWindow() {
     g_en.selectModule(mi); const pk::Module &m = g_en.pack.mods[mi];
     if (!g_hModWnd) g_hModWnd = CreateWindowA("PTModule", "", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 120, 80, 800, 720, 0, 0, 0, 0);
     char t[256]; snprintf(t, sizeof t, "%s   [%03X/%03X]   %d functions", A(g_en.modName(m)).c_str(), m.ids[0].first, m.ids[0].second, (int)g_en.entries.size());
-    SetWindowTextA(g_hModTitle, t); SetWindowTextA(g_hModWnd, (A(g_en.modName(m)) + " - PorscheTool").c_str());
+    SetWindowTextA(g_hModTitle, t); SetWindowTextA(g_hModWnd, (A(g_en.modName(m)) + " - OWIS").c_str());
     SetWindowTextA(g_hOut, "");
     fillList(); SetForegroundWindow(g_hModWnd);
 }
@@ -486,9 +486,9 @@ static LRESULT CALLBACK JobProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         if (id == IDC_J_LIST && HIWORD(w) == LBN_SELCHANGE) { showJobDesc(); return 0; }
         if (id == ID_J_STOP) { g_en.stop = true; return 0; }
         if (id == ID_J_RUN || (id == IDC_J_LIST && HIWORD(w) == LBN_DBLCLK)) {
-            if (g_busy) { MessageBoxA(h, "Another action is still running. Press STOP first.", "PorscheTool", MB_OK); return 0; }
+            if (g_busy) { MessageBoxA(h, "Another action is still running. Press STOP first.", "OWIS", MB_OK); return 0; }
             int k = (int)SendMessageA(g_hJobList, LB_GETCURSEL, 0, 0);
-            if (k < 0 || k >= (int)g_en.pack.jobs.size()) { MessageBoxA(h, "Choose a job in the list first.", "PorscheTool", MB_OK); return 0; }
+            if (k < 0 || k >= (int)g_en.pack.jobs.size()) { MessageBoxA(h, "Choose a job in the list first.", "OWIS", MB_OK); return 0; }
             const pk::Job &jb = g_en.pack.jobs[k];
             Job j; j.id = JOB_GUIDED; j.job = k; j.outWnd = g_hJobOut;
             for (auto &st : jb.steps) {                       // everything the user has to choose is asked before anything runs
@@ -508,7 +508,7 @@ static LRESULT CALLBACK JobProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
 }
 static void openJobsWindow() {
     if (g_en.pack.jobs.empty()) { MessageBoxA(g_hMain, "This vehicle's data pack has no guided jobs yet.\nUse OPEN MODULE for the individual functions.", "Service jobs", MB_OK | MB_ICONINFORMATION); return; }
-    if (!g_hJobWnd) g_hJobWnd = CreateWindowA("PTJobs", "Service jobs - PorscheTool", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 140, 100, 800, 620, 0, 0, 0, 0);
+    if (!g_hJobWnd) g_hJobWnd = CreateWindowA("PTJobs", "Service jobs - OWIS", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 140, 100, 800, 620, 0, 0, 0, 0);
     SendMessageA(g_hJobList, LB_RESETCONTENT, 0, 0);
     for (auto &j : g_en.pack.jobs) SendMessageA(g_hJobList, LB_ADDSTRING, 0, (LPARAM)A(j.title).c_str());
     SendMessageA(g_hJobList, LB_SETCURSEL, 0, 0); showJobDesc();
@@ -569,6 +569,7 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         CreateWindowA("BUTTON", "STOP", WS_CHILD | WS_VISIBLE, x + 396, y, 124, 26, h, (HMENU)ID_STOP, 0, 0);
         y += 32;
         g_hRedact = CreateWindowA("BUTTON", "Hide the VIN serial number in saved reports", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, x, y, 400, 20, h, (HMENU)IDC_REDACT, 0, 0);
+        CreateWindowA("BUTTON", "Add vehicle data...", WS_CHILD | WS_VISIBLE, x + 405, y - 3, 115, 24, h, (HMENU)ID_GETDATA, 0, 0);
         if (g_en.redactVin) SendMessageA(g_hRedact, BM_SETCHECK, BST_CHECKED, 0);
         y += 26;
         g_hLog = CreateWindowA("EDIT", "", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
@@ -576,13 +577,17 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
         SendMessageA(g_hLog, EM_SETLIMITTEXT, 8 * 1024 * 1024, 0);
         HFONT f = CreateFontA(14, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, FIXED_PITCH, "Consolas");
         SendMessageA(g_hLog, WM_SETFONT, (WPARAM)f, 1);
-        logLine("PorscheTool " PT_VERSION " - open-source diagnostics. Ignition ON, engine off, battery charger recommended.");
+        logLine("OWIS " PT_VERSION " - open-source diagnostics. Ignition ON, engine off, battery charger recommended.");
         if (g_demo) logLine("DEMO MODE: a simulated Panamera answers instead of a car. Nothing is sent to an adapter.");
         if (!g_replay.empty()) logLine("REPLAY MODE: answers come from the recorded session " + g_replay);
         if (sk::loaded()) logLine("Coding keys: " + std::to_string(sk::keys().size()) + " algorithms loaded.");
         findPacks();
         for (auto &p : g_packs) SendMessageA(g_hVeh, CB_ADDSTRING, 0, (LPARAM)(A(p.title) + (p.lang == "de" ? "  [original texts]" : "")).c_str());
-        if (g_packs.empty()) logLine("[ERROR] No vehicle data found. Put the 'data' folder next to PorscheTool.exe.");
+        if (g_packs.empty()) {
+            logLine("[NO VEHICLE DATA] OWIS ships without vehicle data. Build it once from your own licensed");
+            logLine("  diagnostic installation: run  Get-vehicle-data.bat  (next to OWIS.exe), or see README.");
+            logLine("  Then put the 'data' folder next to OWIS.exe. Meanwhile '--demo' uses a simulated car.");
+        }
         else {
             int pi = 0;
             for (int i = 0; i < (int)g_packs.size(); i++)
@@ -619,6 +624,16 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM w, LPARAM l) {
             if (g_busy) { SendMessageA(g_hVeh, CB_SETCURSEL, g_curPack, 0); return 0; }
             g_autoDetectTried = 1; loadPack((int)SendMessageA(g_hVeh, CB_GETCURSEL, 0, 0)); return 0; }
         if (id == ID_DETECT) { kickDetect(); return 0; }
+        if (id == ID_GETDATA) {
+            MessageBoxA(h, "OWIS ships no vehicle data. You build it once, in English, from your own licensed\n"
+                "diagnostic installation - OWIS never distributes the manufacturer's data.\n\n"
+                "1. Install Python 3 (python.org) if you do not have it.\n"
+                "2. Run  Get-vehicle-data.bat  (next to OWIS.exe). It asks for your installation's\n"
+                "   Projects-V folder (e.g. ...\\PIDT\\Projects-V) and writes the 'data' folder here.\n"
+                "3. Restart OWIS - the vehicle list fills up.\n\n"
+                "Details are in the README. Without data, '--demo' runs a simulated car.",
+                "Add vehicle data", MB_OK | MB_ICONINFORMATION);
+            return 0; }
         if (id == ID_AUTOVEH) { g_autoDetectTried = 1; Job j; j.id = ID_AUTOVEH; startJob(j); return 0; }
         if (id == ID_STOP) { g_en.stop = true; logLine("[STOP] requested."); return 0; }
         if (id == ID_OPENMOD) { if (g_en.packOk) openModuleWindow(); return 0; }
@@ -676,19 +691,19 @@ int WINAPI WinMain(HINSTANCE hi, HINSTANCE, LPSTR cmd, int show) {
     }
     InitializeCriticalSection(&g_graphLock);
     std::string dir = exeDir(), day = pt::stampNow().substr(0, 8);
-    g_sessionLog = fopen((dir + "\\PorscheTool_log_" + day + ".txt").c_str(), "a");
+    g_sessionLog = fopen((dir + "\\OWIS_log_" + day + ".txt").c_str(), "a");
     g_en.reportDir = dir; g_en.autoMode = g_auto;
     g_en.onLog = logLine; g_en.onOut = outLine; g_en.onSetOut = outSet; g_en.onLive = graphPush;
     if (g_demo) sim::installDemoKeys();              // the simulator's own test keys, never the real key file
-    else sk::load(dir + "\\porschetool.keys");       // optional local coding key file
-    if (!g_demo && g_replay.empty()) g_trace.open(dir + "\\PorscheTool_trace_" + day + ".ptrace");      // session recording, always on
+    else sk::load(dir + "\\owis.keys");       // optional local coding key file
+    if (!g_demo && g_replay.empty()) g_trace.open(dir + "\\OWIS_trace_" + day + ".ptrace");      // session recording, always on
     WNDCLASSA wc = {0}; wc.hInstance = hi; wc.hCursor = LoadCursor(0, IDC_ARROW); wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    wc.lpfnWndProc = WndProc; wc.lpszClassName = "PorscheToolWnd"; RegisterClassA(&wc);
+    wc.lpfnWndProc = WndProc; wc.lpszClassName = "OWISWnd"; RegisterClassA(&wc);
     wc.lpfnWndProc = ModProc; wc.lpszClassName = "PTModule"; RegisterClassA(&wc);
     wc.lpfnWndProc = JobProc; wc.lpszClassName = "PTJobs"; RegisterClassA(&wc);
     wc.lpfnWndProc = InProc; wc.lpszClassName = "PTInput"; RegisterClassA(&wc);
     wc.lpfnWndProc = GraphProc; wc.lpszClassName = "PTGraph"; wc.hbrBackground = nullptr; RegisterClassA(&wc);
-    HWND main = CreateWindowA("PorscheToolWnd", APP_TITLE, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 560, 880, 0, 0, hi, 0);
+    HWND main = CreateWindowA("OWISWnd", APP_TITLE, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 560, 880, 0, 0, hi, 0);
     ShowWindow(main, show); UpdateWindow(main);
     MSG m; while (GetMessage(&m, 0, 0, 0)) {
         if (g_hModWnd && IsDialogMessageA(g_hModWnd, &m)) continue;

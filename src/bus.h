@@ -1,4 +1,4 @@
-// PorscheTool transport abstraction: one diagnostic link to one control unit at a time.
+// OWIS transport abstraction: one diagnostic link to one control unit at a time.
 // Portable (no Windows): the J2534 adapter, Linux SocketCAN, the simulated car and session replay all
 // implement this interface, so everything above it (engine.h) is tested on any OS.
 #pragma once

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/porschetool-banner.png" alt="PorscheTool – free &amp; open-source diagnostics for Porsche, from 996 to Taycan. Your car. Your tools. Right to repair." width="100%">
+  <img src="assets/owis-banner.png" alt="OWIS – free &amp; open-source diagnostics for Porsche, from 996 to Taycan. Your car. Your tools. Right to repair." width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/brstic/porsche-tool/releases/latest"><img src="https://img.shields.io/github/v/release/brstic/porsche-tool?style=for-the-badge&color=00d4e6&label=download" alt="Latest release"></a>
-  <a href="https://github.com/brstic/porsche-tool/releases"><img src="https://img.shields.io/github/downloads/brstic/porsche-tool/total?style=for-the-badge&color=00d4e6" alt="Downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/brstic/porsche-tool?style=for-the-badge&color=555" alt="License"></a>
+  <a href="https://github.com/brstic/owis/releases/latest"><img src="https://img.shields.io/github/v/release/brstic/owis?style=for-the-badge&color=00d4e6&label=download" alt="Latest release"></a>
+  <a href="https://github.com/brstic/owis/releases"><img src="https://img.shields.io/github/downloads/brstic/owis/total?style=for-the-badge&color=00d4e6" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/brstic/owis?style=for-the-badge&color=555" alt="License"></a>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/brstic/porsche-tool/releases/latest"><b>⬇ Download</b></a> ·
+  <a href="https://github.com/brstic/owis/releases/latest"><b>⬇ Download</b></a> ·
   <a href="docs/COVERAGE.md"><b>🚗 Vehicle coverage</b></a> ·
   <a href="ROADMAP.md"><b>🗺 Roadmap</b></a> ·
   <a href="docs/DEVELOPMENT.md"><b>🔬 How it works</b></a>
@@ -36,7 +36,7 @@
 > **Status: not yet tested on a car.** Every layer is tested end to end against a simulated car — down to the CAN
 > frames, through the real J2534 API and through a simulated serial adapter (see [Testing](#testing)). Addresses,
 > functions and fault catalogues come from each vehicle line's diagnostic database. Please report what you see:
-> every session is recorded to `PorscheTool_trace_*.ptrace`, and that file is the most useful thing to attach to an issue.
+> every session is recorded to `OWIS_trace_*.ptrace`, and that file is the most useful thing to attach to an issue.
 
 ## Contents
 
@@ -45,6 +45,7 @@
 - [PDK](#pdk)
 - [Supported vehicles](#supported-vehicles)
 - [Supported hardware](#supported-hardware)
+- [Vehicle data](#vehicle-data)
 - [Quick start (Windows)](#quick-start-windows)
 - [Linux and macOS](#linux-and-macos)
 - [Safety and scope](#safety-and-scope)
@@ -135,41 +136,65 @@ The K-line units of the 996/986 and Cayenne 955/957 need a J2534 cable with K-li
 ## Quick start (Windows)
 
 1. Install the driver of your J2534 adapter (Tactrix: *OpenPort 2.0 J2534 drivers*).
-2. Download the [latest release](https://github.com/brstic/porsche-tool/releases/latest) and unpack it: `PorscheTool.exe` and the `data` folder go side by side.
-3. Connect the adapter to the OBD port. Ignition **ON**, engine off. A battery charger is recommended.
-4. Start `PorscheTool.exe`. The status line turns green and the car is recognised by itself.
-5. Press **SCAN ALL MODULES** — or **SERVICE JOBS** for a procedure. Reports are saved next to the exe.
+2. Download the [latest release](https://github.com/brstic/owis/releases/latest) and unpack it.
+3. **Build the vehicle data once.** OWIS ships no vehicle data — you build it from your own licensed diagnostic
+   installation (see [Vehicle data](#vehicle-data) below). Double-click **`Get-vehicle-data.bat`**, point it at
+   your installation's `Projects-V` folder, and a `data` folder appears next to `OWIS.exe`.
+4. Connect the adapter to the OBD port. Ignition **ON**, engine off. A battery charger is recommended.
+5. Start `OWIS.exe`. The status line turns green and the car is recognised by itself.
+6. Press **SCAN ALL MODULES** — or **SERVICE JOBS** for a procedure. Reports are saved next to the exe.
 
-**No car at hand?** `PorscheTool.exe --demo` runs everything against a simulated Panamera.
+**No car or no data at hand?** `OWIS.exe --demo` runs everything against a built-in simulated Panamera.
 
 <details>
 <summary><b>Command line (Windows exe)</b></summary>
 
 ```text
-PorscheTool.exe --scan                         scan, save the report, exit
-PorscheTool.exe --clear-all                    clear every fault memory
-PorscheTool.exe --vehicle auto --job pdk_oil_fill_mode
-PorscheTool.exe --run PASM "Calibration height front left" 480
-PorscheTool.exe --replay PorscheTool_trace_20261118.ptrace --scan
-PorscheTool.exe --demo                         simulated car
+OWIS.exe --scan                         scan, save the report, exit
+OWIS.exe --clear-all                    clear every fault memory
+OWIS.exe --vehicle auto --job pdk_oil_fill_mode
+OWIS.exe --run PASM "Calibration height front left" 480
+OWIS.exe --replay OWIS_trace_20261118.ptrace --scan
+OWIS.exe --demo                         simulated car
 ```
 </details>
 
 ## Linux and macOS
 
+Build the vehicle data once (needs Python 3 and your own installation), then run the CLI:
+
 ```sh
-./build.sh                                                   # builds build/porschetool-cli
-build/porschetool-cli --slcan /dev/cu.usbmodem1101 scan      # macOS / Linux: serial CAN adapter
+python3 builder/build_data.py /path/to/Projects-V --out ./data   # or double-click get-vehicle-data.command (macOS)
+./build.sh                                                   # builds build/owis-cli
+build/owis-cli --slcan /dev/cu.usbmodem1101 scan      # macOS / Linux: serial CAN adapter
 sudo ip link set can0 up type can bitrate 500000
-build/porschetool-cli --can can0 scan                        # Linux: SocketCAN
-build/porschetool-cli --can can0 jobs                        # the service jobs of this car
-build/porschetool-cli --can can0 job oil_service_reset
-build/porschetool-cli --can can0 live PASM "height front left" 20
-build/porschetool-cli --demo scan                            # simulated car, any OS
+build/owis-cli --can can0 scan                        # Linux: SocketCAN
+build/owis-cli --can can0 jobs                        # the service jobs of this car
+build/owis-cli --can can0 job oil_service_reset
+build/owis-cli --can can0 live PASM "height front left" 20
+build/owis-cli --demo scan                            # simulated car, any OS
 ```
 
-Run `porschetool-cli --help` for all commands (`vehicles`, `detect`, `modules`, `functions`, `faults`, `clear`,
+Run `owis-cli --help` for all commands (`vehicles`, `detect`, `modules`, `functions`, `faults`, `clear`,
 `run`, `live`, `job`, `--record`, `--replay` …).
+
+## Vehicle data
+
+**OWIS contains no vehicle data of its own.** The addresses, functions and fault texts come from the diagnostic
+database of the manufacturer's workshop software, which is not OWIS's to distribute. Instead OWIS reads that
+database and builds the data locally, on the machine of someone who owns and is licensed to use that installation:
+
+```sh
+# Windows: double-click Get-vehicle-data.bat   ·   macOS: double-click get-vehicle-data.command
+python3 builder/build_data.py "<...>/Projects-V" ["<...>/PIDT_MIG/Projects-V"] --out ./data
+```
+
+It needs Python 3 and writes English packs for every vehicle line it finds (the English texts come from the
+translation cache shipped in `tools/i18n/`, so no translation model and no internet are needed). The coding **key
+file** (`owis.keys`) is likewise built locally, from your own installation, with `tools/build_keyfile.py`; OWIS
+ships no unlock constants. Full details in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+Without the data, `--demo` still runs a built-in simulated car so you can try everything.
 
 ## Safety and scope
 
@@ -187,21 +212,21 @@ Run `porschetool-cli --help` for all commands (`vehicles`, `detect`, `modules`, 
 ## How it works
 
 ```
-your PIWIS install ──tools/odxdb.py──▶ services, decoded responses, fault codes, addresses (per control unit)
+your own install ──tools/odxdb.py──────▶ services, decoded responses, fault codes, addresses (per control unit)
                    └─tools/build_pack.py──▶ data/<LINE>.json  ◀── English texts, guided-job rules
 src/engine.h      everything done with a car (portable C++17, tested without a car)
 src/*_bus.h       J2534 · SocketCAN · SLCAN · simulator · record/replay, + ISO-TP and VW TP 2.0
-src/porschetool.cpp   Windows app        src/cli.cpp   Linux / macOS command line
+src/owis.cpp   Windows app        src/cli.cpp   Linux / macOS command line
 ```
 
-The released `data` packs are English and keyed by a hash of the original text, so they carry no original database
-text. To rebuild them from your own installation (and to generate the local coding key file), see
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+OWIS distributes no vehicle data: you build the `data` packs from your own installation (see
+[Vehicle data](#vehicle-data)). The English texts are keyed by a hash of the original, so a built pack carries no
+original database text. Details and the key-file build in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Building from source
 
 ```sh
-./build.sh       # runs all tests, then builds PorscheTool.exe (32-bit, static, mingw-w64),
+./build.sh       # runs all tests, then builds OWIS.exe (32-bit, static, mingw-w64),
                  # the command-line tool and the mock adapter
 ```
 
@@ -219,12 +244,12 @@ text. To rebuild them from your own installation (and to generate the local codi
 - the **SLCAN** transport through a pseudo-terminal, frame by frame (ISO-TP and TP 2.0).
 
 The mock adapter `build/op20pt32.dll` puts the same simulated car behind the J2534 API (CAN, K-line and raw CAN), so
-`PorscheTool.exe` itself is tested end to end under Wine.
+`OWIS.exe` itself is tested end to end under Wine.
 
 ## Contributing
 
 The most valuable contribution is a **session from a real car**: run a scan (and any job you need), then open an
-issue with the `PorscheTool_trace_*.ptrace` file and the HTML report — hide the VIN with the checkbox if you prefer.
+issue with the `OWIS_trace_*.ptrace` file and the HTML report — hide the VIN with the checkbox if you prefer.
 Wrong English texts can be fixed in `tools/i18n/`. See [ROADMAP.md](ROADMAP.md) for what is next.
 
 ## Disclaimer

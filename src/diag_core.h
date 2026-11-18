@@ -1,4 +1,4 @@
-// porsche-tool - protocol-independent core (no Windows, no J2534): response parsing,
+// OWIS - protocol-independent core (no Windows, no J2534): response parsing,
 // fault-code formatting and catalogue lookup.  Unit-tested on any OS by tests/test_core.cpp.
 #pragma once
 #include <cstdint>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a PorscheTool data pack (data/<PLATFORM>.json) from a local PIWIS project directory.
+"""Build a OWIS data pack (data/<PLATFORM>.json) from a local PIWIS project directory.
 
 Pack format (version 1), compact JSON:
   {"v":1, "platform":"G1", "title":"...", "str":[strings], "dops":[...], "mods":[...]}
@@ -205,7 +205,7 @@ def pair_ids(ids):
     out.sort(key=lambda p: (p[0] > 0x7FF, not (0x700 <= p[0] <= 0x7FF), p[0]))   # 0x7xx, other 11-bit, 29-bit
     return out
 
-# Functions PorscheTool deliberately does not offer (anti-theft, odometer, crash data, high-voltage safety,
+# Functions OWIS deliberately does not offer (anti-theft, odometer, crash data, high-voltage safety,
 # flashing / memory access). Matched on the source name and on the request service id.
 EXCLUDE_RE = re.compile(r"(?i)(Wegfahrsperre|Immobili|WFS|Key.?Learn|Schl(ue|ü)ssel.*(lern|anlern|programm)|KESSY|Kryptolog|"
                         r"Komponentenschutz|Component.?Protect|Gesamtwegstrecke|Kilometerstand.*(schreib|setz|Write)|Odometer.*Write|"
