@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="PorscheTool – free &amp; open-source diagnostics for Porsche, from 996 to Taycan. Your car. Your tools. Right to repair." width="100%">
+  <img src="assets/porschetool-banner.png" alt="PorscheTool – free &amp; open-source diagnostics for Porsche, from 996 to Taycan. Your car. Your tools. Right to repair." width="100%">
 </p>
 
 <p align="center">
