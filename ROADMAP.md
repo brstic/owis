@@ -42,6 +42,8 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
 - [ ] Confirm the K-line init and timing on a 996/986 and a Cayenne 955.
 - [ ] Confirm the VW TP 2.0 addresses of the sub-bus units (standard VW addresses, marked "not yet confirmed" in the app).
 - [ ] Run each guided job once on a car of each line and adjust its wording from what the car shows.
+- [ ] Confirm the coding unlock on a real unit of each seed/key algorithm family.
+- [ ] Find the TP 2.0 address of the rear differential lock (Quersperre) - not in the database.
 
 ### 2. Coding coverage
 - [x] The coding algorithm of every unit is now read from the database itself (the SeedKey job of the Codierung
@@ -50,27 +52,26 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
       (calibration / emissions-relevant changes are out of scope) and their calibration-data writes are not offered.
       Checking the old hand table against the database corrected the instrument cluster of 970 / 918 / 92A (database:
       `ASAM_Seedkey_Ki`, not the 991 cluster algorithm) and the rear differential lock (database: no real coding key).
-- [ ] 992 / J1 / E3 / G2: their databases name no offline coding algorithm (SFD) - nothing to map offline.
-- [ ] Confirm the unlock on a real unit of each algorithm family (part of section 1).
+
 
 ### 3. Sub-bus control units — done
 - [x] VW TP 2.0 transport (`src/tp20.h`): channel setup, parameters, numbered frames with ACK, keep-alive. Doors,
       seats, auxiliary heater, trailer hitch, rear camera and lane-change assistant of 970 / 92A / 95B / 991 are scanned
       and fully usable. J2534 (raw CAN), SocketCAN and SLCAN; tested frame by frame against the simulator and under Wine.
-- [ ] Rear differential lock (Quersperre): TP 2.0 address unknown — needs a car.
+- Rear differential lock (Quersperre): its TP 2.0 address is not in the database (see section 1).
 
 ### 4. More guided jobs — done
 - [x] PDK: oil fill mode, teach-in shift rods / clutches / hydraulics (with the unmet conditions listed on failure),
       adaptation reset; Tiptronic adaptation reset.
 - [x] PDCC fill and bleed, headlight range basic setting, headlight axle-sensor calibration, climate flap motor
       addressing, A/C compressor run-in reset, TPMS: take target pressures / write target pressures.
-- [ ] Further procedures as they are confirmed on a car (ACC / camera alignment need targets and stay manual functions).
+- ACC / camera alignment need physical targets and stay individual functions under *Open module*.
 
 ### 5. Translation quality — done for the main units
 - [x] Fault texts of engine, PDK, PSM, PASM and cluster checked (hand translations); glossary extended and the cached
       machine translation refreshed where the glossary applies; technical identifiers shown as readable words;
       readable control-unit names on every line.
-- [ ] Ongoing: hand-fix wrong translations as users report them (`tools/i18n/*.json`).
+- Ongoing: wrong translations reported by users are fixed in `tools/i18n/*.json`.
 
 ### 6. Distribution
 - [x] macOS and Linux: `porschetool-cli --slcan <port>` for serial CAN adapters (CANable, CANtact, USBtin ...), with
@@ -79,6 +80,7 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
       CLI and the English packs (no original database texts, VINs or unlock constants).
 
 ## Limits that are not ours to lift
+- 992 / Taycan / 9Y0 / 971: their databases name no offline coding algorithm - coding there needs SFD (below).
 - **SFD (online authentication)** on newer 992 / Taycan / 9Y0 / 971 control units: coding writes need the
   manufacturer's server — see [docs/SFD.md](docs/SFD.md). Reading, live data, tests, routines and jobs work offline.
 
