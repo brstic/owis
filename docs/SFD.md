@@ -34,9 +34,10 @@ and no offline tool can do it.
 
 What that means in PorscheTool:
 
-- The control-unit databases do not say which units need SFD, so the data packs mark it per **vehicle line**
-  (`sfd` in `tools/platforms.py`). On those lines, a coding write on a unit without a mapped seed/key algorithm is
-  not attempted; the app says that coding there needs the online authentication.
+- Units whose database defines the SFD routines (`…protection_of_vehicle_diagnosis`, service `0x29`) are marked
+  per unit (`sfd` in the module); those routines themselves are not offered. In addition the whole line is marked
+  (`sfd` in `tools/platforms.py`), so on 992 / Taycan / 9Y0 / 971 a coding write on a unit without a mapped seed/key
+  algorithm is not attempted; the app says that coding there needs the online authentication.
 - 911 **992**, **Taycan**, Cayenne **9Y0** and the facelift Panamera **971** are affected, depending on model year
   and control unit. Units of those cars that still use a classic seed/key are simply not mapped yet (see above —
   nothing is mapped on a guess).

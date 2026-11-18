@@ -23,9 +23,12 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
   and testing without a car.
 - Coding unlock: seed/key exchange per control unit at the level the database names, verified against the
   simulated control units for UDS (4-byte) and KWP2000 (2-byte); a wrong key is never retried.
-- **K-line** (ISO 14230, fast and 5-baud init) for the older lines; 11- and 29-bit CAN.
+- **K-line** (ISO 14230, fast and 5-baud init) for the older lines; 11- and 29-bit CAN; **VW TP 2.0** for the units
+  behind the gateway (doors, seats, auxiliary heater ...).
+- **PDK / transmission**: oil fill mode, teach-ins with live progress and the unmet conditions, adaptation reset —
+  as in PdkTool, on every line with a PDK.
 - Portable engine (`src/engine.h`) shared by the Windows app and a **command-line tool for Linux/macOS**
-  (SocketCAN on Linux).
+  (SocketCAN on Linux, SLCAN serial CAN adapters on macOS and Linux).
 - Tested without a car: unit tests, a sweep over every function of every pack, the engine against a simulated car,
   and the Windows exe end-to-end under Wine against a mock J2534 adapter (CAN and K-line).
 
@@ -37,29 +40,37 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
 - [ ] Confirm the `0x27` exchange on real control units (protocol plumbing is verified on the simulator, the key
       maths against the PIWIS vectors) — PASM / cluster (UDS) and PDK (KWP2000) first.
 - [ ] Confirm the K-line init and timing on a 996/986 and a Cayenne 955.
+- [ ] Confirm the VW TP 2.0 addresses of the sub-bus units (standard VW addresses, marked "not yet confirmed" in the app).
 - [ ] Run each guided job once on a car of each line and adjust its wording from what the car shows.
 
-### 2. Coding coverage
+### 2. Coding coverage (needs confirmation on a car)
 - [ ] Extend `seedkey_map.py` past the 36 high-confidence units as each is confirmed (never map on a guess).
 - [ ] Map the classic seed/key units of 992 / J1 / E3 / G2 that do not use SFD.
 
-### 3. Sub-bus control units
-- [ ] VW TP 2.0 / TP 1.6 transport for the units behind the gateway that the packs list as "sub-bus only"
-      (doors, seats, trailer hitch, auxiliary heater on G1/E2 ...).
+### 3. Sub-bus control units — done
+- [x] VW TP 2.0 transport (`src/tp20.h`): channel setup, parameters, numbered frames with ACK, keep-alive. Doors,
+      seats, auxiliary heater, trailer hitch, rear camera and lane-change assistant of 970 / 92A / 95B / 991 are scanned
+      and fully usable. J2534 (raw CAN), SocketCAN and SLCAN; tested frame by frame against the simulator and under Wine.
+- [ ] Rear differential lock (Quersperre): TP 2.0 address unknown — needs a car.
 
-### 4. More guided jobs
-- [ ] Add rules to `tools/jobs.py` for further procedures as they are confirmed: PDCC fill and bleed, headlight
-      basic setting, ACC / camera alignment, TPMS learning, climate flap addressing, A/C compressor run-in.
+### 4. More guided jobs — done
+- [x] PDK: oil fill mode, teach-in shift rods / clutches / hydraulics (with the unmet conditions listed on failure),
+      adaptation reset; Tiptronic adaptation reset.
+- [x] PDCC fill and bleed, headlight range basic setting, headlight axle-sensor calibration, climate flap motor
+      addressing, A/C compressor run-in reset, TPMS: take target pressures / write target pressures.
+- [ ] Further procedures as they are confirmed on a car (ACC / camera alignment need targets and stay manual functions).
 
-### 5. Translation quality
-- [ ] Hand-check the machine translation of the most-used texts (fault texts of engine, PDK, PSM, PASM, cluster)
-      in `tools/i18n/`.
+### 5. Translation quality — done for the main units
+- [x] Fault texts of engine, PDK, PSM, PASM and cluster checked (hand translations); glossary extended and the cached
+      machine translation refreshed where the glossary applies; technical identifiers shown as readable words;
+      readable control-unit names on every line.
+- [ ] Ongoing: hand-fix wrong translations as users report them (`tools/i18n/*.json`).
 
 ### 6. Distribution
+- [x] macOS and Linux: `porschetool-cli --slcan <port>` for serial CAN adapters (CANable, CANtact, USBtin ...), with
+      ISO-TP and TP 2.0 in user space; Linux also `--can <iface>` (SocketCAN). Tested through a pseudo-terminal.
 - [ ] Publish `porsche-tool` as a public repo: banner, README, release of `PorscheTool.exe`, the CLI and the English
-      packs — same redaction rules as the pdk tool (no PIWIS texts, VINs or unlock constants). Needs the owner's go.
-- [ ] macOS: a J2534-equivalent driver path (e.g. a USB CAN adapter through a user-space driver); today macOS runs
-      the CLI in demo / replay mode only.
+      packs — same redaction rules as the pdk tool (no PIWIS texts, VINs or unlock constants). **Needs the owner's go.**
 
 ## Limits that are not ours to lift
 - **SFD (online authentication)** on newer 992 / Taycan / 9Y0 / 971 control units: coding writes need the

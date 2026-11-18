@@ -26,7 +26,8 @@ One small Windows exe (or a Linux command-line tool) and a cheap cable.
 | 🚗 | **Knows the car** | Reads the VIN and picks the right vehicle data by itself. |
 | 🔎 | **Scan all modules** | Every control unit: part number / software / hardware, all faults in plain English with status, how often and when each fault was stored (mileage, date, voltage) and the snapshot values. |
 | 🧹 | **Clear all faults** | One click, with confirmation. |
-| 🛠️ | **Service jobs** | Service reset, brake bleeding with the ABS pump, parking-brake pad change, ride-height and level-sensor calibration, steering-angle and sensor-cluster calibration, engine adaptation reset, battery registration — one button each, from session to result. |
+| 🛠️ | **Service jobs** | Service reset, brake bleeding with the ABS pump, parking-brake pad change, ride-height and level-sensor calibration, steering-angle and sensor-cluster calibration, engine adaptation reset, battery registration, PDCC fill and bleed, headlight basic setting, climate flap addressing, A/C run-in reset, tyre-pressure targets — one button each, from session to result. |
+| ⚙️ | **PDK** | Oil fill mode, teach-in of shift rods, clutches and hydraulics with live progress and the exact conditions that are not met, adaptation reset. |
 | 📈 | **Live data** | Several values at once, with a graph and a CSV log. |
 | 🧪 | **Every function** | All actuator tests, routines, adaptation and coding values the control unit's database defines, with safety notes before anything moves. |
 | 📄 | **Reports** | Text and printable HTML report of every scan, VIN can be hidden. |
@@ -53,12 +54,15 @@ high-voltage safety disable, emissions-relevant engine changes. Coding on newer 
 ## Linux / macOS
 
 ```sh
-./build.sh                                   # builds build/porschetool-cli (and the Windows exe if mingw is there)
+./build.sh                                              # builds build/porschetool-cli (and the Windows exe if mingw is there)
+build/porschetool-cli --slcan /dev/cu.usbmodem1101 scan # macOS / Linux: serial CAN adapter (CANable, CANtact, USBtin ...)
 sudo ip link set can0 up type can bitrate 500000
-build/porschetool-cli --can can0 scan        # any SocketCAN adapter (candleLight, CANable, PEAK, Kvaser ...)
-build/porschetool-cli --can can0 jobs
-build/porschetool-cli --demo scan            # simulated car, any OS
+build/porschetool-cli --can can0 scan                   # Linux: any SocketCAN adapter (candleLight, PEAK, Kvaser ...)
+build/porschetool-cli --can can0 job pdk_oil_fill_mode
+build/porschetool-cli --demo scan                       # simulated car, any OS
 ```
+
+On a CAN-only adapter the K-line units of the 996/986 and Cayenne 955 are not reachable; use a J2534 cable for those.
 
 ## Building from source
 

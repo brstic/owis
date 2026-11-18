@@ -115,7 +115,8 @@ public:
     size_t functionCount() const { size_t n = 0; for (auto &m : pack.mods) n += m.svc.size(); return n; }
     std::string modName(const pk::Module &m) const { std::string n = pack.S(m.name); return n.empty() ? m.key : n; }
     int findModule(const std::string &key) const { for (int i = 0; i < (int)pack.mods.size(); i++) if (pack.mods[i].key == key) return i; return -1; }
-    static int linkOf(const pk::Module &m) { return m.link == 1 ? LINK_KLINE : LINK_CAN; }
+    static int linkOf(const pk::Module &m) { return m.link == 1 ? LINK_KLINE : m.link == 2 ? LINK_TP20 : LINK_CAN; }
+    static bool kwpOnly(const Bus &b) { return b.kind == LINK_KLINE || b.kind == LINK_TP20; }
     static bool link(Bus &b, const pk::Module &m, const std::pair<int, int> &id) {
         b.klInit = m.klInit; b.kl5Baud = m.kl5Baud; b.klBaud = m.klBaud;
         return b.target((uint32_t)id.first, (uint32_t)id.second, linkOf(m));
@@ -152,7 +153,7 @@ public:
             if (b.gotAnswer) mr.present = true;
             return false;
         };
-        if (b.kind == LINK_KLINE) return tryKwp();
+        if (kwpOnly(b)) return tryKwp();
         if (proto == PROTO_KWP) { if (tryKwp()) return true; return mr.present && tryUds(); }
         if (tryUds()) return true;
         if (!mr.present && proto == PROTO_UDS) return false;
@@ -276,14 +277,15 @@ public:
         return false;
     }
     std::string rowHeader(const ScanRow &r) const {
-        char hdr[64]; bool kl = r.mod >= 0 && r.mod < (int)pack.mods.size() && pack.mods[r.mod].link == 1;
-        snprintf(hdr, sizeof hdr, kl ? "[K-line %02X] " : r.req > 0x7FF ? "[%08X] " : "[%03X] ", (unsigned)r.req);
+        char hdr[64]; int lk = r.mod >= 0 && r.mod < (int)pack.mods.size() ? pack.mods[r.mod].link : 0;
+        snprintf(hdr, sizeof hdr, lk == 1 ? "[K-line %02X] " : lk == 2 ? "[TP2.0 %02X] " : r.req > 0x7FF ? "[%08X] " : "[%03X] ", (unsigned)r.req);
         std::string n = r.name; if (n.size() < 40) n.append(40 - n.size(), ' ');
         return hdr + n;
     }
     void printRow(const ScanRow &r, bool toReport, bool detail = false) {
         auto p = [&](const std::string &s) { if (toReport) rep(s); else out(s); };
-        if (!r.present) { p(rowHeader(r) + " -- no answer (not fitted or asleep)"); return; }
+        bool unconf = r.mod >= 0 && r.mod < (int)pack.mods.size() && !pack.mods[r.mod].addrConfirmed;
+        if (!r.present) { p(rowHeader(r) + " -- no answer (not fitted or asleep)" + (unconf ? " [address not yet confirmed on a car]" : "")); return; }
         p(rowHeader(r) + (r.proto == PROTO_UDS ? " UDS  " : " KWP  ") + std::to_string(r.faults.size()) + " fault(s)");
         if (!r.ident.empty()) p("        " + r.ident);
         for (auto &f : r.faults) {
@@ -544,9 +546,9 @@ public:
         for (auto &pp : m.ids) {
             if (!link(b, m, pp)) return false;
             std::vector<uint8_t> r;
-            if (m.proto != PROTO_KWP && b.kind != LINK_KLINE) { b.xfer({0x10, 0x01}, r, 600); if (b.gotAnswer) { proto = PROTO_UDS; return true; } }
+            if (m.proto != PROTO_KWP && !kwpOnly(b)) { b.xfer({0x10, 0x01}, r, 600); if (b.gotAnswer) { proto = PROTO_UDS; return true; } }
             b.xfer({0x10, 0x81}, r, 600);
-            if (b.gotAnswer) { proto = (b.lastNrc == 0x12 || b.lastNrc == 0x11) && b.kind != LINK_KLINE ? PROTO_UDS : PROTO_KWP; return true; }
+            if (b.gotAnswer) { proto = (b.lastNrc == 0x12 || b.lastNrc == 0x11) && !kwpOnly(b) ? PROTO_UDS : PROTO_KWP; return true; }
         }
         return false;
     }
@@ -644,14 +646,40 @@ public:
     }
 
     // What a routine status says: 1 still running, 2 finished, 3 failed / aborted, 0 cannot tell.
+    // The first value that says something decides (the routine's own status comes first in the response);
+    // condition flags and step bits further down are not read as the status.
+    static int textState(const std::string &raw) {
+        std::string t = lowerAscii(raw);
+        if (t.empty()) return 0;
+        if (hasAny(t, {"not started", "nicht gestartet", "keine dia anfrage", "no request"})) return 0;
+        if (hasAny(t, {"abort", "abgebroch", "abbruch", "fehlerhaft", "fehler gespeichert", "error", "failed", "fehlgeschlagen", "nicht erfolgreich",
+                       "not successful", "unsuccessful", "n.i.o", "abgelehnt", "rejected", "denied", "canceled", "cancelled",
+                       "nicht durchf", "not possible", "not feasible", "cannot be carried"})) return 3;
+        if (hasAny(t, {"abgelaufen", "beendet", "finished", "completed", "complete", "abgeschlossen", "erfolgreich", "successful", "done",
+                       "fertig", "i.o", "correctly", "expired", "ended", "terminated"})) return 2;
+        if (hasAny(t, {"not active", "nicht aktiv", "inactive", "inaktiv", "not running"})) return 2;
+        if (hasAny(t, {"active", "aktiv", "running", "l\xC3\xA4uft", "laeuft", "in progress", "busy", "in arbeit", "gestartet", "started",
+                       "akzeptiert", "accepted", "pending", "wartet", "waiting"})) return 1;
+        return 0;
+    }
     static int routineState(const std::vector<pk::Value> &vs) {
-        std::string t; for (auto &v : vs) t += lowerAscii(v.text) + " | ";
-        if (hasAny(t, {"abort", "abgebroch", "abbruch", "fehler", "error", "failed", "fehlgeschlagen", "nicht erfolgreich", "not successful", "unsuccessful", "n.i.o",
-                       "abgelehnt", "rejected", "denied", "canceled", "cancelled"})) return 3;
-        bool neg = hasAny(t, {"not active", "nicht aktiv", "inactive", "inaktiv", "not running", "not started", "nicht gestartet"});
-        if (!neg && hasAny(t, {"active", "aktiv", "running", "l\xC3\xA4uft", "laeuft", "in progress", "busy", "ausgef\xC3\xBChrt wird", "in arbeit", "gestartet", "started", "akzeptiert", "accepted", "pending"})) return 1;
-        if (hasAny(t, {"finished", "beendet", "completed", "complete", "abgeschlossen", "erfolgreich", "successful", "done", "fertig", "i.o", "correctly"})) return 2;
-        return neg ? 2 : 0;
+        for (auto &v : vs) {
+            if (v.text.empty()) continue;
+            if (hasAny(lowerAscii(v.text), {"bedingung", "condition", "zwischenschritt", "intermediate step"})) continue;
+            int st = textState(v.text);
+            if (st) return st;
+        }
+        return 0;
+    }
+    // Conditions a routine reports as not met (e.g. "selector lever in P: condition not met").
+    static std::string unmetConditions(const std::vector<pk::Value> &vs) {
+        std::string o;
+        for (auto &v : vs) {
+            std::string t = lowerAscii(v.text);
+            if (hasAny(t, {"nicht erf\xC3\xBCllt", "nicht erfuellt", "not met", "not fulfilled", "not fullfilled", "not satisfied"}))
+                o += "\n    - " + v.name;
+        }
+        return o;
     }
 
     int readbackOf(const pk::Module &m, int writeSvc) const {
@@ -678,13 +706,20 @@ public:
         if (e.cat == 'R' && e.result >= 0 && e.result != e.main) {   // follow the routine
             out(guided ? "Routine started - following the status..." : "Routine started. Status follows every second - press STOP to end the routine.");
             std::string last; uint32_t t0 = nowMs(), tp = t0, tchg = t0; int state = 0, sameState = 0;
+            std::vector<pk::Value> lastVals;
             uint32_t limit = autoMode ? 5000u : guided ? 180000u : 600000u;
             bool natural = false;
             while (!stop && nowMs() - t0 < limit) {
                 nap(1000);
                 std::vector<pk::Value> rv;
                 if (runService(b, m, e.result, proto, {}, rv, true)) {
-                    std::string t; for (auto &v : rv) t += v.name + " = " + v.text + (v.unit.empty() ? "" : " " + v.unit) + "; ";
+                    lastVals = rv;
+                    std::string t; for (auto &v : rv) {
+                        std::string tl = lowerAscii(v.text);       // condition / step flags are summarised below, not listed every second
+                        if (hasAny(tl, {"bedingung", "condition", "zwischenschritt", "intermediate step"})) continue;
+                        if (v.text.empty() && v.unit.empty()) continue;            // structure header
+                        t += v.name + " = " + v.text + (v.unit.empty() ? "" : " " + v.unit) + "; ";
+                    }
                     if (t != last) { char ts[16]; snprintf(ts, sizeof ts, "[%3us] ", (unsigned)((nowMs() - t0) / 1000)); out(ts + t); last = t; tchg = nowMs(); }
                     int st = routineState(rv);
                     sameState = st == state ? sameState + 1 : 1; state = st;
@@ -693,7 +728,11 @@ public:
                 }
                 if (nowMs() - tp > 2000) { testerPresent(b, proto); tp = nowMs(); }
             }
-            if (state == 3) { out("[FAILED] the control unit reports the routine did not complete: " + last); ok = false; }
+            if (state == 3) {
+                out("[FAILED] the control unit reports the routine did not complete: " + last); ok = false;
+                std::string u = unmetConditions(lastVals);
+                if (!u.empty()) out("  Conditions not met:" + u);
+            }
             else if (natural) out(state == 2 ? "[OK] routine finished" : "[DONE] status no longer changes: " + last);
             else if (!stop && !autoMode) { out("[TIMEOUT] the routine did not report an end"); ok = false; }
             if (!natural && e.stop >= 0) { out("Stopping routine..."); runService(b, m, e.stop, proto, {}, vals, true); }

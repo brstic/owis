@@ -5,17 +5,17 @@ defines; whether a given car has a control unit fitted shows in the scan.
 
 | Line | Vehicle | VIN types | Control units | on CAN | on K-line | sub-bus only | Functions | Live data | Actuator tests | Routines | Coding / adaptation | Fault codes | Units with fault environment data | Units with a mapped coding key | Units with SFD | Guided jobs |
 |---|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| G1 | Panamera (970) 2010-2016 | 970 | 41 | 33 | 0 | 8 | 10326 | 3912 | 824 | 2746 | 1494 | 9001 | 28 | 21 | 0 | 9 |
-| G2 | Panamera (971) 2017-2023 | 971, 974 | 93 | 93 | 0 | 0 | 25303 | 10281 | 2085 | 3166 | 4982 | 13414 | 65 | 0 | 1 | 8 |
-| 9x1 | 911 (991) / Boxster, Cayman (981, 718) 2012-2019 | 991, 981, 982 | 43 | 40 | 0 | 3 | 12549 | 5364 | 1656 | 2329 | 1794 | 5950 | 31 | 19 | 0 | 9 |
-| CS1 | 911 / Cayman Clubsport race cars (CS1) | - | 15 | 14 | 0 | 1 | 8039 | 3653 | 1389 | 1532 | 815 | 3610 | 11 | 9 | 0 | 7 |
-| 918S | 918 Spyder 2013-2015 | 918 | 28 | 26 | 0 | 2 | 5344 | 1933 | 881 | 864 | 684 | 6528 | 24 | 16 | 0 | 8 |
-| 992 | 911 (992) 2019- | 992 | 68 | 68 | 0 | 0 | 23032 | 9574 | 1985 | 3505 | 4285 | 11609 | 50 | 0 | 0 | 8 |
-| Cajun | Macan (95B) 2014- | 95B | 43 | 38 | 0 | 5 | 15004 | 7093 | 1511 | 2616 | 2192 | 6975 | 33 | 16 | 0 | 9 |
-| E2 | Cayenne (92A) 2011-2017 | 92A | 46 | 38 | 0 | 8 | 14644 | 6606 | 1375 | 2952 | 1974 | 12967 | 38 | 23 | 0 | 8 |
-| E3 | Cayenne (9Y0) 2018- | 9YA, 9YB, 9Y0 | 96 | 96 | 0 | 0 | 25967 | 10442 | 1976 | 3643 | 5105 | 13977 | 69 | 0 | 0 | 7 |
-| J1 | Taycan (9J1) 2020- | Y1A, Y1B, Y1C | 64 | 64 | 0 | 0 | 20824 | 8081 | 1647 | 2932 | 4535 | 11745 | 55 | 0 | 0 | 7 |
-| 9x7 | 911 (997) / Boxster, Cayman (987) 2005-2012 | 997, 987 | 37 | 33 | 3 | 1 | 3372 | 612 | 1 | 1367 | 781 | 5682 | 0 | 0 | 0 | 2 |
+| G1 | Panamera (970) 2010-2016 | 970 | 44 | 43 | 0 | 1 | 10706 | 3996 | 824 | 2940 | 1541 | 9228 | 28 | 22 | 1 | 19 |
+| G2 | Panamera (971) 2017-2023 | 971, 974 | 93 | 93 | 0 | 0 | 25023 | 10210 | 2085 | 2957 | 4982 | 13414 | 65 | 0 | 39 | 14 |
+| 9x1 | 911 (991) / Boxster, Cayman (981, 718) 2012-2019 | 991, 981, 982 | 46 | 46 | 0 | 0 | 12923 | 5448 | 1656 | 2519 | 1839 | 6181 | 31 | 20 | 0 | 19 |
+| CS1 | 911 / Cayman Clubsport race cars (CS1) | - | 16 | 16 | 0 | 0 | 8131 | 3665 | 1389 | 1576 | 829 | 3695 | 11 | 9 | 0 | 15 |
+| 918S | 918 Spyder 2013-2015 | 918 | 29 | 28 | 0 | 1 | 5436 | 1945 | 881 | 908 | 698 | 6613 | 24 | 16 | 0 | 17 |
+| 992 | 911 (992) 2019- | 992 | 68 | 68 | 0 | 0 | 22746 | 9513 | 1985 | 3280 | 4285 | 11609 | 50 | 0 | 32 | 13 |
+| Cajun | Macan (95B) 2014- | 95B | 46 | 45 | 0 | 1 | 15380 | 7177 | 1511 | 2810 | 2235 | 7206 | 33 | 17 | 1 | 12 |
+| E2 | Cayenne (92A) 2011-2017 | 92A | 49 | 48 | 0 | 1 | 15011 | 6690 | 1375 | 3139 | 2015 | 13198 | 38 | 24 | 1 | 14 |
+| E3 | Cayenne (9Y0) 2018- | 9YA, 9YB, 9Y0 | 96 | 96 | 0 | 0 | 25692 | 10383 | 1976 | 3427 | 5105 | 13977 | 69 | 0 | 29 | 9 |
+| J1 | Taycan (9J1) 2020- | Y1A, Y1B, Y1C | 64 | 64 | 0 | 0 | 20537 | 8015 | 1647 | 2711 | 4535 | 11745 | 55 | 0 | 33 | 9 |
+| 9x7 | 911 (997) / Boxster, Cayman (987) 2005-2012 | 997, 987 | 37 | 33 | 3 | 1 | 3372 | 612 | 1 | 1367 | 781 | 5682 | 0 | 0 | 0 | 9 |
 | 9x6 | 911 (996) / Boxster (986) 1997-2005 | 996, 986 | 24 | 0 | 24 | 0 | 726 | 53 | 92 | 451 | 71 | 739 | 0 | 0 | 0 | 0 |
 | E1 | Cayenne (9PA) 2003-2010 | 9PA | 46 | 7 | 32 | 7 | 1395 | 75 | 26 | 1004 | 168 | 2411 | 0 | 0 | 0 | 1 |
 
@@ -38,6 +38,19 @@ not reachable through an ISO-TP or K-line adapter.
 | Steering-angle sensor calibration | yes |  | yes | yes | yes |  | yes | yes |  |  |  |  |  |
 | PSM sensor cluster calibration (yaw rate / acceleration) | yes |  | yes | yes | yes |  |  |  |  |  |  |  |  |
 | Engine: reset adaptation values | yes | yes | yes | yes |  | yes | yes | yes | yes | yes | yes |  | yes |
+| PDCC: fill and bleed the hydraulics | yes |  | yes |  |  |  |  | yes |  |  |  |  |  |
+| Headlight range control: basic setting | yes |  | yes |  | yes |  | yes | yes |  |  |  |  |  |
+| Headlight levelling: axle sensor calibration | yes |  | yes | yes | yes |  | yes | yes |  |  |  |  |  |
+| Climate control: flap motor addressing |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| A/C compressor: reset run-in | yes | yes | yes | yes | yes |  | yes | yes | yes | yes | yes |  |  |
+| Tyre pressure: take target pressures from the cluster | yes |  | yes | yes | yes |  |  | yes |  |  |  |  |  |
+| Tyre pressure: set target pressures |  | yes |  |  |  | yes |  |  | yes | yes |  |  |  |
+| PDK: oil fill mode | yes | yes | yes | yes | yes | yes |  |  |  |  | yes |  |  |
+| PDK teach-in: shift rods | yes | yes | yes | yes | yes | yes |  |  |  |  | yes |  |  |
+| PDK teach-in: clutches | yes | yes | yes | yes | yes | yes |  |  |  |  | yes |  |  |
+| PDK teach-in: hydraulics | yes | yes | yes | yes | yes | yes |  |  |  |  | yes |  |  |
+| PDK: reset adaptation values |  |  | yes | yes | yes |  |  |  |  |  | yes |  |  |
+| Tiptronic: reset adaptation values | yes |  |  |  |  |  |  | yes |  |  | yes |  |  |
 | Battery change: register the new battery | yes | yes | yes | yes | yes | yes | yes | yes |  |  |  |  |  |
 
 A job appears for a line only when the function it needs was found in that line's database with a known

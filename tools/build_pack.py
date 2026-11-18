@@ -191,6 +191,12 @@ def old_name(key):
         if re.search(pat, k): return "%s (%s)" % (nm, k)
     return None
 
+# VW TP 2.0 units behind the gateway: the databases do not carry their TP 2.0 address, so the standard VW
+# diagnostic addresses are used. Marked "tpc": 0 in the pack (not confirmed on a car); a wrong address only
+# means the channel does not open. Logical-link short name -> address.
+TP20_ADDR = {"TUER_VL": 0x42, "TUER_VR": 0x52, "TUER_HL": 0x62, "TUER_HR": 0x72, "SITZ_FAHRER": 0x36, "SITZ_BEIFAHRER": 0x06,
+             "ZUSATZHEIZUNG": 0x18, "ANHAENGER": 0x69, "RUECKFAHRKAMERA": 0x6C, "SWA": 0x3C}
+
 def pair_ids(ids):
     out = []
     for q in ids.get("req", []):
@@ -206,7 +212,8 @@ EXCLUDE_RE = re.compile(r"(?i)(Wegfahrsperre|Immobili|WFS|Key.?Learn|Schl(ue|ü)
                         r"Wegstrecke.*(vorstellen|zur(ue|ü)ck)|Crash|Unfall|Verriegelung|Entriegelung|"
                         r"High_?Voltage_?System_?Deactiv|Isolation.*deaktiv|HV.*(Deaktiv|abschalt)|"
                         r"Erase.?Memory|Flash|Programmier(ung|session|modus)|Programming|Bootloader|Download|Upload|"
-                        r"Memory.?(Read|Write)|Transfer.?Data|Security.?Access|SecurAcces|Seed|Fingerprint|Kodiercontainer)")
+                        r"Memory.?(Read|Write)|Transfer.?Data|Security.?Access|SecurAcces|Seed|Fingerprint|Kodiercontainer|"
+                        r"protection.?of.?vehicle.?diagnosis|Schutz.?Fahrzeug.?Diagnose)")
 EXCLUDE_SID = {0x23, 0x27, 0x28, 0x29, 0x34, 0x35, 0x36, 0x37, 0x3D, 0x83, 0x84, 0x85, 0x86, 0x87, 0x10, 0x11, 0x3E,
                0x14, 0x18, 0x19, 0x17, 0x12, 0x13}
 
@@ -333,6 +340,8 @@ def build(proj, platform, title, lang="en", progress=print):
         if not ids:
             k = kline_link(e, name, links)
             if k: ids, kl = k
+        tplinks = [] if ids else [(n2, l) for n2, l in links.items() if "TP20" in l.get("proto", "") and
+                                  (l.get("ecu") == ox.djb2(name) or l.get("ecu") in e.ecu_ids)]
         svcs = e.services(); dtcs = e.dtcs()
         proto = 1 if any(p.get("const") == 0x19 and p["byte"] == 0 for s in svcs for p in s["request"]) else \
                 2 if any(p.get("const") == 0x18 and p["byte"] == 0 for s in svcs for p in s["request"]) else 0
@@ -350,6 +359,7 @@ def build(proj, platform, title, lang="en", progress=print):
             m = {"k": name, "n": pk.L(nice) if nice else pk.S(ln, name), "ids": [list(p) for p in ids[:3]], "p": proto, "svc": [], "dtc": [],
                  "_seen": set(), "_dtcseen": set(), "dbs": [], "_src": []}
             if kl: m["link"] = 1; m["kl"] = kl; m["p"] = 2
+            if tplinks: m["_tp"] = tplinks
             if pr: groups[pr] = m
             else: nocan.append(m)
         m["dbs"].append(name)
@@ -369,7 +379,7 @@ def build(proj, platform, title, lang="en", progress=print):
             if s["sn"] in m["_seen"]: continue
             m["_seen"].add(s["sn"])
             sid = s["request"][0].get("const") if s["request"] else None
-            if sid == 0x29 or re.search(r"(?<![A-Za-z])SFD(?![a-z])|Schutz.?Fahrzeug.?Diagnose", s["sn"] + " " + s["ln"]):
+            if sid == 0x29 or re.search(r"(?<![A-Za-z])SFD(?![a-z])|Schutz.?Fahrzeug.?Diagnose|protection.?of.?vehicle.?diagnosis", s["sn"] + " " + s["ln"], re.I):
                 m["sfd"] = 1                               # unit protected by online authentication (see docs/SFD.md)
             if sid in EXCLUDE_SID or EXCLUDE_RE.search(s["sn"] + " " + s["ln"]):
                 excluded[0] += 1; continue
@@ -383,8 +393,20 @@ def build(proj, platform, title, lang="en", progress=print):
             bits, code = code_key(disp)
             if (bits, code) in m["_dtcseen"]: continue
             m["_dtcseen"].add((bits, code)); m["dtc"].append([code, bits, pk.S(txt)])
-        progress("  %-34s %s svc %4d dtc %4d" % (name, (("K-line %02X" % ids[0][0]) if kl else " ".join("%03X/%03X" % tuple(p) for p in ids[:2])) or "no CAN", len(svcs), len(dtcs)))
-    mods = list(groups.values()) + nocan
+        progress("  %-34s %s svc %4d dtc %4d" % (name, (("K-line %02X" % ids[0][0]) if kl else ("TP2.0 (%d link(s))" % len(tplinks)) if tplinks else " ".join("%03X/%03X" % tuple(p) for p in ids[:2])) or "no CAN", len(svcs), len(dtcs)))
+    # one module per TP 2.0 logical link (front doors share one database for left and right ...)
+    tp_mods = []
+    for m in list(nocan):
+        tl = [(n2, l) for n2, l in m.pop("_tp", []) if n2 in TP20_ADDR]
+        if not tl: continue
+        nocan.remove(m)
+        for n2, l in sorted(tl, key=lambda x: TP20_ADDR[x[0]]):
+            t = dict(m); t["k"] = m["k"] if len(tl) == 1 else "%s_%s" % (m["k"], n2)
+            t["n"] = pk.S(l.get("ln") or n2, n2); t["ids"] = [[TP20_ADDR[n2], 0]]; t["link"] = 2; t["p"] = 2; t["tpc"] = 0
+            t["_base"] = m["k"]
+            tp_mods.append(t)
+    for m in nocan: m.pop("_tp", None)
+    mods = list(groups.values()) + tp_mods + nocan
     joblist = jobdefs.resolve(mods, pk, progress)
     # Environment data: the standard records (fault frequency, mileage, time stamp ...) are the same on all
     # control units of a line. Units whose own layout could not be resolved get the line's most common one;
@@ -393,7 +415,7 @@ def build(proj, platform, title, lang="en", progress=print):
     std = json.loads(sig.most_common(1)[0][0]) if sig else None
     nown = nstd = 0
     for m in mods:
-        m.pop("_seen"); m.pop("_dtcseen"); m.pop("_src")
+        m.pop("_seen", None); m.pop("_dtcseen", None); m.pop("_src", None)
         env = m.pop("_env", None); had = m.pop("_envsvc", False)
         if env: nown += 1
         elif had and std:
@@ -403,7 +425,7 @@ def build(proj, platform, title, lang="en", progress=print):
     for m in mods:
         # coding-unlock algorithm name (reference only; constants live in the local key file).
         # Only emitted when at least one service of this module needs a Codierung key.
-        algo = skmap.algo_for(m["k"])
+        algo = skmap.algo_for(m.pop("_base", m["k"]))
         if algo and any(len(s) > 3 and (s[3] & 0x100) for s in m["svc"]):
             m["sk"] = algo
     progress("  units with online authentication (SFD): %d" % sum(1 for m in mods if m.get("sfd")))

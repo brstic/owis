@@ -22,8 +22,10 @@ PIWIS install ──tools/odxdb.py──> per-ECU services (requests, decoded re
 src/pack.h (+ json.h)  loads a pack, builds requests, decodes responses (ODX semantics)
 src/engine.h           everything done with a car: scan/clear, environment + snapshot data, functions,
                        coding unlock, jobs, VIN detection, reports            (portable, no Windows)
-src/bus.h              transport interface   ─ j2534_bus.h (Windows: CAN ISO-TP + K-line ISO 14230)
-                                             ─ socketcan_bus.h (Linux: kernel ISO-TP)
+src/bus.h              transport interface   ─ j2534_bus.h (Windows: CAN ISO-TP + K-line ISO 14230 + raw CAN)
+                                             ─ socketcan_bus.h (Linux: kernel ISO-TP + raw CAN)
+                                             ─ slcan_bus.h (macOS / Linux serial CAN, isotp.h in user space)
+src/tp20.h             VW TP 2.0 over raw CAN frames (units behind the gateway)
                                              ─ sim.h (simulated car)   ─ trace.h (record / replay)
 src/porschetool.cpp    Win32 app (main window, module window, jobs window, live graph)
 src/cli.cpp            porschetool-cli for Linux / macOS / scripts

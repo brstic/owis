@@ -11,6 +11,7 @@ PACK=""; for f in data/G1_de.json data/G1.json; do [ -f "$f" ] && PACK="$f" && b
 if [ -n "$PACK" ]; then
   $CXX -std=c++17 -O2 -Wall -Isrc tests/test_pack.cpp -o build/test_pack && ./build/test_pack "$PACK" | tail -2
   $CXX -std=c++17 -O2 -Wall -Isrc tests/test_engine.cpp -o build/test_engine && ./build/test_engine "$PACK" build | tail -1
+  $CXX -std=c++17 -O2 -Wall -Isrc tests/test_slcan.cpp -o build/test_slcan -lpthread && ./build/test_slcan "$PACK" | tail -1
 else
   echo "(no data pack in data/ - pack and engine tests skipped; build one with tools/make_packs.py)"
 fi

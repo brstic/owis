@@ -342,7 +342,7 @@ static void findPacks() {
 static void fillModules() {
     SendMessageA(g_hMod, CB_RESETCONTENT, 0, 0);
     for (auto &m : g_en.pack.mods) if (!m.ids.empty()) {
-        char t[240]; snprintf(t, sizeof t, m.link == 1 ? "%s  [K-line %02X]" : "%s  [%03X]", A(g_en.modName(m)).c_str(), m.ids[0].first);
+        char t[240]; snprintf(t, sizeof t, m.link == 1 ? "%s  [K-line %02X]" : m.link == 2 ? "%s  [TP2.0 %02X]" : "%s  [%03X]", A(g_en.modName(m)).c_str(), m.ids[0].first);
         SendMessageA(g_hMod, CB_ADDSTRING, 0, (LPARAM)t);
     }
     SendMessageA(g_hMod, CB_SETCURSEL, 0, 0);

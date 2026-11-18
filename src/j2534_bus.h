@@ -4,6 +4,7 @@
 #pragma once
 #ifdef _WIN32
 #include "bus.h"
+#include "tp20.h"
 #include <windows.h>
 #include <cstring>
 
@@ -17,7 +18,7 @@ typedef struct {
 typedef struct { unsigned long Parameter, Value; } SCONFIG;
 typedef struct { unsigned long NumOfParams; SCONFIG *ConfigPtr; } SCONFIG_LIST;
 typedef struct { unsigned long NumOfBytes; unsigned char *BytePtr; } SBYTE_ARRAY;
-enum { J_ISO14230 = 4, J_ISO15765 = 6, J_STATUS_NOERROR = 0, J_PASS_FILTER = 1, J_FLOW_CONTROL_FILTER = 3,
+enum { J_CAN = 5, J_ISO14230 = 4, J_ISO15765 = 6, J_STATUS_NOERROR = 0, J_PASS_FILTER = 1, J_FLOW_CONTROL_FILTER = 3,
        J_ISO15765_FRAME_PAD = 0x40, J_CAN_29BIT_ID = 0x100, J_CAN_ID_BOTH = 0x800, J_K_LINE_ONLY = 0x1000,
        J_TX_MSG_TYPE = 0x01, J_START_OF_MESSAGE = 0x02,
        J_SET_CONFIG = 0x02, J_FIVE_BAUD_INIT = 0x04, J_FAST_INIT = 0x05, J_CLEAR_RX_BUFFER = 0x08,
@@ -93,15 +94,63 @@ struct J2534Api {
 };
 inline J2534Api &j2534() { static J2534Api a; return a; }
 
-class J2534Bus : public Bus {
-    unsigned long dev = 0, chan = 0, filt = 0, kchan = 0, kfilt = 0;
-    bool hasFilt = false, connected = false, kOpen = false, kUp = false;
+class J2534Bus : public Bus, public RawCan {
+    unsigned long dev = 0, chan = 0, filt = 0, kchan = 0, kfilt = 0, cchan = 0, cfilt = 0;
+    bool hasFilt = false, connected = false, kOpen = false, kUp = false, cOpen = false;
+    Tp20 tp{*this};
     unsigned long kBaud = 0;
     static void putId(PASSTHRU_MSG &m, unsigned long id) {
         m.Data[0] = (id >> 24) & 0xFF; m.Data[1] = (id >> 16) & 0xFF; m.Data[2] = (id >> 8) & 0xFF; m.Data[3] = id & 0xFF;
     }
     bool ext() const { return txId > 0x7FF || rxId > 0x7FF; }
 public:
+    // ---- raw CAN (for VW TP 2.0). Adapters that allow only one protocol at a time get the ISO 15765
+    //      channel closed while TP 2.0 is in use and reopened afterwards.
+    bool rawOpen() override {
+        J2534Api &a = j2534();
+        if (cOpen) return true;
+        if (a.connect(dev, J_CAN, 0, 500000, &cchan) != J_STATUS_NOERROR) {
+            if (connected) { if (hasFilt) a.stopFilter(chan, filt); hasFilt = false; a.disconnect(chan); connected = false; }
+            if (a.connect(dev, J_CAN, 0, 500000, &cchan) != J_STATUS_NOERROR) { error("[ERROR] the adapter cannot open raw CAN for VW TP 2.0."); return false; }
+        }
+        cOpen = true;
+        PASSTHRU_MSG mask = {0}, patt = {0};
+        mask.ProtocolID = patt.ProtocolID = J_CAN; mask.DataSize = patt.DataSize = 4;
+        a.startFilter(cchan, J_PASS_FILTER, &mask, &patt, nullptr, &cfilt);     // all frames; Tp20 picks its ids
+        return true;
+    }
+    void rawClose() override {
+        J2534Api &a = j2534();
+        if (cOpen) { a.stopFilter(cchan, cfilt); a.disconnect(cchan); cOpen = false; }
+    }
+    bool sendFrame(const CanFrame &f) override {
+        J2534Api &a = j2534(); PASSTHRU_MSG m = {0}; unsigned long num = 1;
+        m.ProtocolID = J_CAN; putId(m, f.id);
+        for (size_t i = 0; i < f.d.size() && i < 8; i++) m.Data[4 + i] = f.d[i];
+        m.DataSize = 4 + (unsigned long)std::min<size_t>(8, f.d.size());
+        return a.writeMsgs(cchan, &m, &num, 500) == J_STATUS_NOERROR;
+    }
+    bool recvFrame(CanFrame &f, unsigned timeoutMs) override {
+        J2534Api &a = j2534(); uint32_t t0 = nowMs();
+        do {
+            PASSTHRU_MSG m = {0}; unsigned long num = 1;
+            long st = a.readMsgs(cchan, &m, &num, 20);
+            if (st != J_STATUS_NOERROR || num == 0 || m.DataSize < 4 || (m.RxStatus & J_TX_MSG_TYPE)) continue;
+            f.id = ((unsigned long)m.Data[0] << 24) | (m.Data[1] << 16) | (m.Data[2] << 8) | m.Data[3];
+            f.d.assign(m.Data + 4, m.Data + m.DataSize);
+            return true;
+        } while (nowMs() - t0 < timeoutMs);
+        return false;
+    }
+    bool ensureIso() {
+        J2534Api &a = j2534();
+        if (connected) return true;
+        rawClose();
+        if (a.connect(dev, J_ISO15765, J_CAN_ID_BOTH, 500000, &chan) != J_STATUS_NOERROR &&
+            a.connect(dev, J_ISO15765, 0, 500000, &chan) != J_STATUS_NOERROR) { error("[ERROR] PassThruConnect (CAN 500k) failed."); return false; }
+        connected = true; return true;
+    }
+
     bool open() override {
         J2534Api &a = j2534();
         if (!a.load()) { error("[ERROR] J2534 driver not found or incomplete. Install the adapter drivers (Tactrix: op20pt32.dll)."); return false; }
@@ -112,6 +161,8 @@ public:
     }
     void close() override {
         J2534Api &a = j2534();
+        if (tp.connected()) tp.close();
+        rawClose();
         if (hasFilt && a.stopFilter) a.stopFilter(chan, filt);
         if (kOpen && a.disconnect) a.disconnect(kchan);
         if (connected && a.disconnect) a.disconnect(chan);
@@ -154,8 +205,11 @@ public:
     }
     bool target(uint32_t tx, uint32_t rx, int linkKind = LINK_CAN) override {
         J2534Api &a = j2534();
+        if (tp.connected() && (linkKind != LINK_TP20 || tx != tp.address())) tp.close();
         Bus::target(tx, rx, linkKind);
         if (linkKind == LINK_KLINE) { if (!kOpenChannel()) return false; kInit(); return true; }
+        if (linkKind == LINK_TP20) { if (!rawOpen()) return false; if (!tp.connected()) tp.open((uint8_t)tx); return true; }
+        if (!ensureIso()) return false;
         if (hasFilt) { a.stopFilter(chan, filt); hasFilt = false; }
         PASSTHRU_MSG mask = {0}, patt = {0}, flow = {0};
         mask.ProtocolID = patt.ProtocolID = flow.ProtocolID = J_ISO15765;
@@ -169,6 +223,7 @@ public:
     }
     bool sendRaw(const std::vector<uint8_t> &p) override {
         J2534Api &a = j2534(); PASSTHRU_MSG m = {0}; unsigned long num = 1;
+        if (kind == LINK_TP20) { tp.keepAlive(); return tp.sendMessage(p); }
         if (kind == LINK_KLINE) {
             if (!kUp || p.size() > 255) return false;
             m.ProtocolID = J_ISO14230; size_t h = 0;
@@ -184,6 +239,7 @@ public:
     }
     bool recvRaw(std::vector<uint8_t> &out, unsigned timeoutMs) override {
         J2534Api &a = j2534(); uint32_t t0 = nowMs();
+        if (kind == LINK_TP20) return tp.recvMessage(out, timeoutMs);
         while (nowMs() - t0 < timeoutMs) {
             PASSTHRU_MSG m = {0}; unsigned long num = 1;
             long st = a.readMsgs(kind == LINK_KLINE ? kchan : chan, &m, &num, 50);

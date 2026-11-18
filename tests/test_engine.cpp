@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
     for (auto &r : en.scan) { if (r.present) { present++; faults += (int)r.faults.size(); }
         if (r.req == 0x755) pasm = &r; if (r.req == 0x70F) pdk = &r; if (r.req == 0x753) sel = &r; }
     printf("scan: %d units answering, %d faults, VIN %s\n", present, faults, en.vin.c_str());
-    CHECK(present == 7 && faults == 3);
+    CHECK(present == 8 && faults == 4);                     // 7 on CAN/ISO-TP + the door on TP 2.0
     CHECK(en.vin == sim::DEMO_VIN);
     CHECK(pasm && pasm->proto == PROTO_UDS && pasm->faults.size() == 1 && pasm->faults[0].d.code == 0x000110);
     if (pasm && !pasm->faults.empty()) { printf("  PASM fault stored: %s\n", pasm->faults[0].env.c_str());
@@ -43,8 +43,18 @@ int main(int argc, char **argv) {
     CHECK(!en.lastTxt.empty() && !en.lastHtml.empty());
     std::string html = slurp(en.lastHtml), txt = slurp(en.lastTxt);
     CHECK(has(html, "000110") && has(html, "P1872") && has(html, sim::DEMO_VIN) && has(html, "Mileage 123456 km"));
-    CHECK(has(txt, "Modules answering: 7   Faults: 3"));
+    CHECK(has(txt, "Modules answering: 8   Faults: 4"));
     tw.close(); bus.tap = nullptr;
+
+    // ---- 1b. unit behind the gateway on VW TP 2.0 (frame-level: channel setup, ACKs, multi-frame answers)
+    {   int di = -1; for (int i = 0; i < (int)en.pack.mods.size(); i++) if (en.pack.mods[i].link == 2 && en.pack.mods[i].ids[0].first == 0x42) di = i;
+        CHECK(di >= 0);
+        if (di >= 0) { ScanRow row; CHECK(en.scanOne(bus, di, true, row)); en.printRow(row, false);
+            CHECK(row.present && row.proto == PROTO_KWP && row.faults.size() == 1 && has(row.ident, "Tuersteuergeraet FS H07 0130"));
+            CHECK(!en.pack.mods[di].addrConfirmed); }
+        int none = -1; for (int i = 0; i < (int)en.pack.mods.size(); i++) if (en.pack.mods[i].link == 2 && en.pack.mods[i].ids[0].first == 0x52) none = i;
+        ScanRow r2; if (none >= 0) CHECK(!en.scanOne(bus, none, false, r2));          // passenger door not fitted: no channel
+    }
 
     // ---- 2. replay the recorded session: same result without the car
     {   ReplayBus rb; CHECK(rb.load(tracePath)); CHECK(rb.open());
@@ -52,7 +62,7 @@ int main(int argc, char **argv) {
         e2.actScanAll(rb);
         int p2 = 0, f2 = 0; for (auto &r : e2.scan) if (r.present) { p2++; f2 += (int)r.faults.size(); }
         printf("replay: %d units, %d faults (%zu recorded requests)\n", p2, f2, rb.requests);
-        CHECK(p2 == 7 && f2 == 3 && e2.vin == sim::DEMO_VIN);
+        CHECK(p2 == 8 && f2 == 4 && e2.vin == sim::DEMO_VIN);
         std::string h2 = slurp(e2.lastHtml);
         CHECK(!has(h2, sim::DEMO_VIN) && has(h2, "WP0ZZZ97ZCL******"));           // VIN redaction
         remove(e2.lastHtml.c_str()); remove(e2.lastTxt.c_str());
@@ -124,6 +134,20 @@ int main(int argc, char **argv) {
     job = en.findJob("service_reset"); CHECK(job);
     if (job) { outText.clear(); CHECK(Engine::askCount(job->steps[0]) == 3);
         CHECK(en.runJob(bus, *job, {{1, 1, 0}})); CHECK(has(outText, "> 31 01 04 50 03 ")); }
+
+    // PDK teach-in (KWP2000 31 20 / 33 20): followed to "finished"; on failure the unmet conditions are listed
+    if (const pk::Job *ti = en.findJob("pdk_teach_in_shift_rods")) {
+        outText.clear(); CHECK(en.runJob(bus, *ti, {})); printf("%s", outText.c_str());
+        CHECK(has(outText, "> 31 20") && has(outText, "[OK] routine finished") && has(outText, "[JOB DONE]"));
+        bus.car.ecus[0x70F].teachFail = true; outText.clear();
+        CHECK(!en.runJob(bus, *ti, {})); printf("%s", outText.c_str());
+        CHECK(has(outText, "[FAILED]") && has(outText, "Conditions not met"));
+        CHECK(has(outText, "Stellung P") || has(outText, "lever in P"));                       // German or English pack
+        CHECK(has(outText, "Systemdruck") || has(outText, "System pressure"));
+        CHECK(!has(outText, "Synchronpunkt ermittelt\n"));                                       // met conditions are not listed
+        bus.car.ecus[0x70F].teachFail = false;
+    } else CHECK(false);
+    CHECK(en.findJob("pdk_oil_fill_mode") && en.findJob("pdk_teach_in_clutches") && en.findJob("pdk_teach_in_hydraulics"));
 
     // byte-typed selection inputs are numbers: "All adaption values" = 0x040000 (regression)
     if (const pk::Job *ar = en.findJob("engine_adaptation_reset")) {

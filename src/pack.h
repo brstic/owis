@@ -31,7 +31,8 @@ struct Module {
     std::string sk;                       // coding seed/key algorithm name (reference only), "" = none mapped
     int saLevel = 0, saBytes = 0;         // SecurityAccess request-seed sub-function for coding and the seed length (0 = unknown)
     bool sfd = false;                     // protected by online authentication (SFD): coding cannot be unlocked offline
-    int link = 0;                         // 0 = diagnostic CAN (ISO-TP), 1 = K-line (ids[0].first = ECU address)
+    int link = 0;                         // 0 = diagnostic CAN (ISO-TP), 1 = K-line, 2 = VW TP 2.0 (ids[0].first = ECU address)
+    bool addrConfirmed = true;            // false: address from the VW convention, not from the database
     int klInit = 2, kl5Baud = 0, klBaud = 10400;      // K-line: init type (1 five-baud, 2 fast), 5-baud address, baud rate
 };
 // One guided job: a short list of functions run in order, resolved when the pack is built.
@@ -78,6 +79,7 @@ public:
             if (!m["sk"].isNull()) mo.sk = m["sk"].s;
             if (m["sa"].t == JVal::ARR) { mo.saLevel = m["sa"][0].i(); mo.saBytes = m["sa"][1].i(); }
             if (!m["sfd"].isNull()) mo.sfd = m["sfd"].i() != 0;
+            if (!m["tpc"].isNull()) mo.addrConfirmed = m["tpc"].i() != 0;
             if (!m["link"].isNull()) mo.link = m["link"].i();
             if (m["kl"].t == JVal::ARR) { mo.klInit = m["kl"][0].i(); mo.kl5Baud = m["kl"][1].i(); mo.klBaud = m["kl"][2].i() > 0 ? m["kl"][2].i() : 10400; }
             for (auto &p : m["ids"].a) mo.ids.push_back({p[0].i(), p[1].i()});

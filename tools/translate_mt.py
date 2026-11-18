@@ -43,12 +43,18 @@ PRE = [
     (r"\bLuft(spalt|spiel)\b", "air gap"), (r"\bKilometerstand\b", "mileage"), (r"\bBetriebsdauer\b", "operating time"),
     (r"\bTransportmodus\b", "transport mode"), (r"\bFahrzeugvariante\b", "vehicle variant"), (r"\bSpannung\b", "voltage"),
     (r"\bZeitstempel\b", "timestamp"), (r"\bAktuator\w*", "actuator"), (r"\bKundendienst\w*", "customer service"),
+    (r"\bDruckpr(ü|ue)fung\b", "pressure test"), (r"\bP(ü|ue)fung(s)?\w*", "test"), (r"\bKurztest\b", "short test"),
+    (r"\bTrimmregelung\b", "trim control"), (r"\bRennstartz(ä|ae)hler\b", "launch control counter"),
+    (r"\bFederbein(e)?\b", "strut"), (r"\bbef(ü|ue)llen\b", "fill"), (r"\bHaeufigkeitsz(ae|ä)hler|H(ä|ae)ufigkeitsz(ä|ae)hler\b", "frequency counter"),
+    (r"\bWegsensorik\w*", "travel sensor"), (r"\bSchaltstangen\b", "shift rods"), (r"\bKupplungen\b", "clutches"),
+    (r"\bGetriebe(steuerung)?\b", "transmission"), (r"\bDrucksteller\b", "pressure actuator"), (r"\bAnsteuerung\b", "activation"),
 ]
 POST = [
     (r"\bshort circuit (to |against )?(mass|ground|earth)\b", "short to ground"), (r"\bmass\b", "ground"),
     (r"\bventilation\b", "bleeding"), (r"\bForgetting [Cc]ounters?\b", "unlearn counter"),
     (r"\bstarting race counter\b", "launch control counter"), (r"\bchassis number\b", "VIN"),
     (r"\b[Rr]econciliation\b", "calibration"), (r"\brestocking\b", "filling"), (r"\bcontrol device\b", "control unit"),
+    (r"\bUnlearned counter\b", "unlearn counter"), (r"\bCrush test\b", "pressure test"),
     (r"\s+", " "),
 ]
 EN_WORDS = None
@@ -77,15 +83,22 @@ def post(t):
     t = t.strip()
     return t[:1].upper() + t[1:] if t[:1].islower() else t
 
+def pretty(t):
+    """English technical names arrive as identifiers: Rear_left_ABS_inlet_valve -> Rear left ABS inlet valve"""
+    if "_" in t and " " not in t.strip(): t = re.sub(r"_+", " ", t).strip()
+    return t
+
 def main():
-    model = sys.argv[1]; packs = sys.argv[2:]
+    refresh = "--refresh" in sys.argv          # re-translate cached texts the glossary has rules for
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    model = args[0]; packs = args[1:]
     import ctranslate2, sentencepiece as spm
     dev = "cpu"
     tr = ctranslate2.Translator(os.path.join(model, "model"), device=dev, inter_threads=4, intra_threads=2)
     sp = spm.SentencePieceProcessor(model_file=os.path.join(model, "sentencepiece.model"))
     known = {}
     for f in sorted(os.listdir(os.path.join(HERE, "i18n"))):
-        if f.endswith(".json") and not f.startswith("untranslated"):
+        if f.endswith(".json") and not f.startswith("untranslated") and not f.startswith("mt_"):     # hand translations only
             known.update(json.load(open(os.path.join(HERE, "i18n", f), encoding="utf-8")))
     cache_p = os.path.join(HERE, "i18n", "mt_en.json")
     cache = json.load(open(cache_p, encoding="utf-8")) if os.path.exists(cache_p) else {}
@@ -96,8 +109,9 @@ def main():
         for i, t in enumerate(d["str"]):
             if i in units or not t.strip(): continue
             h = "%08x" % djb2(t.strip())
-            if h in known or h in cache: continue
-            if is_english(t): cache[h] = t.strip(); continue
+            if h in known: continue
+            if h in cache and not (refresh and any(re.search(a, t) for a, b in PRE)): continue
+            if is_english(t): cache[h] = pretty(t.strip()); continue
             todo[h] = t.strip()
     print("to translate:", len(todo), flush=True)
     items = list(todo.items()); t0 = time.time()

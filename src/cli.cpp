@@ -1,12 +1,14 @@
 // porschetool-cli: the PorscheTool engine on the command line, for Linux and macOS (and scripts).
 // Same engine, data packs and safety rules as the Windows app.
 //   Linux : any SocketCAN interface (--can can0)
+//   macOS / Linux: SLCAN serial CAN adapters - CANable, CANtact, USBtin ... (--slcan /dev/cu.usbmodem1101)
 //   any OS: --demo (simulated car) and --replay <trace> (a session recorded by the Windows app or by --record)
 // Build:  c++ -std=c++17 -O2 -Isrc src/cli.cpp -o porschetool-cli       License: MIT.
 #include "engine.h"
 #include "sim.h"
 #include "trace.h"
 #include "socketcan_bus.h"
+#include "slcan_bus.h"
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -18,6 +20,8 @@ static void usage() {
            "porschetool-cli [options] <command>\n\n"
            "Connection (one of):\n"
            "  --can <iface>      Linux SocketCAN interface, e.g. can0 (500 kbit/s, ISO-TP in the kernel)\n"
+           "  --slcan <port>     serial CAN adapter (CANable, CANtact, USBtin ...), macOS or Linux,\n"
+           "                     e.g. /dev/cu.usbmodem1101 or /dev/ttyACM0\n"
            "  --demo             simulated car, nothing is sent anywhere\n"
            "  --replay <file>    answer from a recorded session (.ptrace)\n"
            "Options:\n"
@@ -50,12 +54,12 @@ static bool confirm(const std::string &what, const std::string &note, bool yes) 
 }
 
 int main(int argc, char **argv) {
-    std::string data = "data", vehicle, can, replay, record, outDir = "."; bool demo = false, yes = false, redact = false;
+    std::string data = "data", vehicle, can, slcan, replay, record, outDir = "."; bool demo = false, yes = false, redact = false;
     std::vector<std::string> cmd;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
-        if (a == "--data") data = next(); else if (a == "--vehicle") vehicle = next(); else if (a == "--can") can = next();
+        if (a == "--data") data = next(); else if (a == "--vehicle") vehicle = next(); else if (a == "--can") can = next(); else if (a == "--slcan") slcan = next();
         else if (a == "--replay") replay = next(); else if (a == "--record") record = next(); else if (a == "--out") outDir = next();
         else if (a == "--demo") demo = true; else if (a == "--yes") yes = true; else if (a == "--redact-vin") redact = true;
         else if (a == "--help" || a == "-h") { usage(); return 0; }
@@ -86,11 +90,16 @@ int main(int argc, char **argv) {
 #ifdef __linux__
     else if (!can.empty()) bus.reset(new SocketCanBus(can));
 #endif
+#if defined(__APPLE__) || defined(__linux__)
+    else if (!slcan.empty()) bus.reset(new SlcanBus(slcan));
+#endif
     if (!bus && !offline) {
 #ifdef __linux__
-        fprintf(stderr, "no connection: use --can <iface>, --demo or --replay <file>\n");
+        fprintf(stderr, "no connection: use --can <iface>, --slcan <port>, --demo or --replay <file>\n");
+#elif defined(__APPLE__)
+        fprintf(stderr, "no connection: use --slcan <port> (serial CAN adapter), --demo or --replay <file>\n");
 #else
-        fprintf(stderr, "no connection: on this system use --demo or --replay <file>; a car is reached with --can on Linux or with the Windows app (J2534)\n");
+        fprintf(stderr, "no connection: use --demo or --replay <file>; on Windows the app uses a J2534 adapter\n");
 #endif
         return 2;
     }

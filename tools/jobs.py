@@ -101,6 +101,73 @@ JOBS = [
                              (r"(?i)RBM|Kraftstoff|LDR|Lade|lc_|DMTL|INTC|NMAX|Lambda|(ö|oe)l|Verlust|(ü|ue)berwachung", 0),
                              (r".", ("$opt", r"(?i)^all[ _]adapti"))], max_ask=0, label="Reset all adaptation values")]),
 
+    dict(id="pdcc_fill_bleed", title="PDCC: fill and bleed the hydraulics",
+         desc="Fills the PDCC (active roll stabilisation) lines and then bleeds the system - after work on the PDCC "
+              "pump, valve block, actuators or lines. Enter the fill times the workshop manual gives.",
+         steps=[dict(mod=r"^PDCC", fn=r"Leitungsbef(ü|ue)llung|Line.?fill", sid=(0x31,), label="Fill the lines"),
+                dict(mod=r"^PDCC", fn=r"Entl(ü|ue)ftungsroutine|Bleeding.?routine", sid=(0x31,), max_ask=0, label="Bleed the system")]),
+    dict(id="headlight_basic_setting", title="Headlight range control: basic setting",
+         desc="Basic setting of the automatic headlight range control after a headlight, a levelling sensor or the "
+              "suspension was changed, or after headlight aiming. Car unladen on a level floor.",
+         steps=[dict(mod=r"^SCHEINWERFER$|^Scheinwerfer", fn=r"ALWR-Kalibrierung$|ALWR-Kalibrierung ", no=r"au(ß|ss)erordentlich", sid=(0x31,),
+                     preset=[(r".", ("$opt", r"^Grundeinstellung$|^basic setting$"))], max_ask=0, label="Headlight range basic setting")]),
+    dict(id="headlight_sensor_calibration", title="Headlight levelling: axle sensor calibration",
+         desc="Calibrates the axle (level) sensor used for the headlight range control, after the sensor or its "
+              "linkage was changed. Car unladen on a level floor.",
+         steps=[dict(mod=r"BCM_vorne", fn=r"Kalibrierung Achssensor", sid=(0x31,), max_ask=0, label="Calibrate the axle sensor")]),
+    dict(id="climate_flap_addressing", title="Climate control: flap motor addressing",
+         desc="Addresses the LIN flap motors of the climate control, measures their travel and verifies them - after "
+              "a flap motor or the climate control unit was replaced.",
+         steps=[dict(mod=r"^BKE$", fn=r"^Autoadressierung LIN-Stellmotoren\b|Autoadressierung LIN-Stellmotoren$", no=r"konditionslos", sid=(0x31,), max_ask=0, label="Auto-address the flap motors"),
+                dict(mod=r"^BKE$", fn=r"Vermessungsfahrt LIN-Stellmotoren", sid=(0x31,), max_ask=0, label="Measure the flap travel"),
+                dict(mod=r"^BKE$", fn=r"Verifikationsfahrt LIN-Stellmotoren", sid=(0x31,), max_ask=0, label="Verify the flap motors")]),
+    dict(id="ac_compressor_runin_reset", title="A/C compressor: reset run-in",
+         desc="Resets the run-in phase of the A/C compressor after a new compressor was fitted, so the control unit "
+              "runs it in gently again.",
+         steps=[dict(mod=r"^BKE$|AirCondi|klima", fn=r"Reset Timer Kompressoreinlauf|Reset Kompressoreinlauf|Reset Einlauftimer", sid=(0x31,),
+                     max_ask=0, label="Reset the compressor run-in")]),
+    dict(id="tpms_target_pressures", title="Tyre pressure: take target pressures from the cluster",
+         desc="Makes the tyre-pressure control unit take over the target pressures selected in the instrument "
+              "cluster - after new tyres, wheels or a changed tyre selection.",
+         steps=[dict(mod=r"^RDK", fn=r"(Ü|Ue)bernahme Solldr(ü|ue)cke", sid=(0x31,), max_ask=0, label="Take over the target pressures")]),
+    dict(id="tpms_write_target_pressures", title="Tyre pressure: set target pressures",
+         desc="Writes the target tyre pressures (standard and full load, front and rear) into the tyre-pressure "
+              "control unit. Use the values from the tyre-pressure label of the car.",
+         steps=[dict(mod=r"TirePress", fn=r"Solldruck_individuell_schreiben", sid=(0x2E,), label="Write the target pressures")]),
+
+    dict(id="pdk_oil_fill_mode", title="PDK: oil fill mode",
+         desc="Puts the PDK into its oil fill / oil level check mode, for filling or checking the transmission oil. "
+              "Follow the oil temperature and the steps of the workshop manual while the mode is active.",
+         steps=[dict(mod=r"Getriebesteuerung_PDK|TransContrModul", fn=r"(Ö|Oe)lbef(ü|ue)llungsmodus|Oil.?fill.?mode", sid=(0x31,), max_ask=0,
+                     label="Start the oil fill mode")]),
+    dict(id="pdk_teach_in_shift_rods", title="PDK teach-in: shift rods",
+         desc="Teach-in of the shift rods after the transmission control unit or the mechatronics was replaced. "
+              "Engine running, selector in P, car standing still. The PDK teach-ins are run one after the other in the "
+              "order the workshop manual gives for the transmission variant (shift rods first).",
+         steps=[dict(mod=r"Getriebesteuerung_PDK|TransContrModul", fn=r"Teach-In( Vorgang der)? Schaltstangen", sid=(0x31,), max_ask=0,
+                     label="Teach in the shift rods")]),
+    dict(id="pdk_teach_in_clutches", title="PDK teach-in: clutches",
+         desc="Teach-in of the clutches after the transmission control unit or the mechatronics was replaced. "
+              "Engine running, selector in P, car standing still. Run it in the order the workshop manual gives.",
+         steps=[dict(mod=r"Getriebesteuerung_PDK|TransContrModul", fn=r"Teach-In( Vorgang der)? Kupplungen", sid=(0x31,), max_ask=0,
+                     label="Teach in the clutches")]),
+    dict(id="pdk_teach_in_hydraulics", title="PDK teach-in: hydraulics",
+         desc="Teach-in of the hydraulics after the transmission control unit or the mechatronics was replaced. "
+              "Engine running, selector in P, car standing still. Run it in the order the workshop manual gives.",
+         steps=[dict(mod=r"Getriebesteuerung_PDK|TransContrModul", fn=r"Teach-In( Vorgang der)? Hydraulik", sid=(0x31,), max_ask=0,
+                     label="Teach in the hydraulics")]),
+    dict(id="pdk_adaptation_reset", title="PDK: reset adaptation values",
+         desc="Resets the learned adaptations of the PDK - after a transmission repair or when the workshop manual asks "
+              "for it. The transmission relearns while driving.",
+         steps=[dict(mod=r"Getriebesteuerung_PDK|TransContrModulOBD", fn=r"Adaptionswerte zur(ü|ue)cksetzen", no=r"(?i)stop|result",
+                     sid=(0x31,), max_ask=0, label="Reset the PDK adaptations")]),
+    dict(id="tiptronic_adaptation_reset", title="Tiptronic: reset adaptation values",
+         desc="Resets the learned shift and converter-clutch adaptations of the Tiptronic transmission - after a "
+              "transmission repair or an oil change where the manual asks for it.",
+         steps=[dict(mod=r"tiptrnc|Tiptronic|TransContrModulUDS", fn=r"EEPROM Bl(ö|oe)cke \(Adaptionen\) zur(ü|ue)cksetzen|Reset of Adaption Values",
+                     no=r"(?i)stop|result", sid=(0x31,), preset=[(r".", ("$opt", r"(?i)^all[ _]adapti"))], max_ask=0,
+                     label="Reset the Tiptronic adaptations")]),
+
     dict(id="battery_registration", title="Battery change: register the new battery",
          desc="Tells the energy management that a new 12 V battery was fitted: capacity, technology and the "
               "battery's part / serial number from its label. Wrong data shortens battery life, so register only a "

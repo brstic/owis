@@ -386,6 +386,11 @@ class Ecu:
                     key, sdop = tr; e["const"] = key; e["row"] = row
                     e["bits"] = 16 if key > 0xFF else 8
                     if sdop: e["_rowdop"] = sdop
+                # the table's key DOP gives the identifier width exactly (1 byte for KWP local identifiers,
+                # 2 bytes for UDS data / routine identifiers)
+                t = self.rec(djb2(p.get("table", "")), (0xAB,)) if p.get("table") else None
+                kd = self.table_keydop(t) if t is not None else None
+                if kd and kd.get("bits") in (8, 16, 24, 32): e["_kbits"] = kd["bits"]
             elif p["ptype"] == 0xB0:
                 e["kind"] = "struct"
                 row = (rowsel or {}).get("row")
@@ -396,13 +401,16 @@ class Ecu:
                 e["dop"] = self.dop(p["dop"])
             out.append(e)
         for e in out: e.pop("_rowdop", None)
-        # key width: the gap to the next parameter; UDS identifiers (22/2E/2F/31) are always 16 bit
+        # key width: from the key DOP when known; else the gap to the next parameter; else UDS identifiers
+        # (22/2E/2F/31 with the identifier after a sub-function) are 16 bit
         sid = out[0].get("const") if out else None
         if sid is not None and sid >= 0x40: sid -= 0x40
         for k, e in enumerate(out):
             if e.get("kind") == "key":
+                kb = e.pop("_kbits", None)
                 nxt = [x["byte"] for x in out[k+1:] if x["byte"] > e["byte"]]
-                if nxt: e["bits"] = 8 * (nxt[0] - e["byte"])
+                if kb: e["bits"] = kb
+                elif nxt: e["bits"] = 8 * (nxt[0] - e["byte"])
                 elif sid in (0x22, 0x2E, 0x2F, 0x31, 0x2C, 0x24): e["bits"] = 16
                 else: e["bits"] = 8 if e.get("const", 0) <= 0xFF else 16
         if req is None:

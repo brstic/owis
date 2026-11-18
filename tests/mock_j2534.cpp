@@ -2,7 +2,8 @@
 // PorscheTool.exe can be tested end-to-end without a car or an adapter (e.g. under Wine):
 //   i686-w64-mingw32-g++ -shared -static -O2 -Isrc tests/mock_j2534.cpp -o op20pt32.dll -Wl,--kill-at
 // Put op20pt32.dll next to PorscheTool.exe (on a PC without a registered J2534 driver).
-// Channel 1 = ISO 15765 (CAN), channel 2 = ISO 14230 (K-line, fast and 5-baud init). See sim.h for the units.
+// Channel 1 = ISO 15765 (CAN), channel 2 = ISO 14230 (K-line, fast and 5-baud init), channel 3 = raw CAN
+// (VW TP 2.0 units behind the gateway, simulated frame by frame). See sim.h for the units.
 #include <windows.h>
 #include "sim.h"
 
@@ -13,7 +14,8 @@ typedef struct {
 typedef struct { unsigned long NumOfBytes; unsigned char *BytePtr; } SBYTE_ARRAY;
 
 static sim::Car g_car;
-static std::deque<PASSTHRU_MSG> g_rx[3];           // per channel
+static sim::Tp20Ecu g_tp(g_car);
+static std::deque<PASSTHRU_MSG> g_rx[4];           // per channel
 static unsigned long g_flt = 0;
 
 static void collect(int chan, unsigned long kAddr) {
@@ -42,14 +44,15 @@ __declspec(dllexport) long __stdcall PassThruClose(unsigned long) { return 0; }
 __declspec(dllexport) long __stdcall PassThruConnect(unsigned long, unsigned long proto, unsigned long, unsigned long, unsigned long *c) {
     if (proto == 6) { *c = 1; return 0; }
     if (proto == 4) { *c = 2; return 0; }
+    if (proto == 5) { *c = 3; return 0; }
     return 1;                                       // ERR_NOT_SUPPORTED
 }
-__declspec(dllexport) long __stdcall PassThruDisconnect(unsigned long c) { if (c < 3) g_rx[c].clear(); return 0; }
+__declspec(dllexport) long __stdcall PassThruDisconnect(unsigned long c) { if (c < 4) g_rx[c].clear(); return 0; }
 __declspec(dllexport) long __stdcall PassThruStartMsgFilter(unsigned long, unsigned long, const PASSTHRU_MSG*, const PASSTHRU_MSG*,
                                                            const PASSTHRU_MSG*, unsigned long *f) { *f = ++g_flt; return 0; }
 __declspec(dllexport) long __stdcall PassThruStopMsgFilter(unsigned long, unsigned long) { return 0; }
 __declspec(dllexport) long __stdcall PassThruIoctl(unsigned long c, unsigned long code, const void *in, void *out) {
-    if (code == 8) { if (c < 3) g_rx[c].clear(); return 0; }                                    // CLEAR_RX_BUFFER
+    if (code == 8) { if (c < 4) g_rx[c].clear(); return 0; }                                    // CLEAR_RX_BUFFER
     if (code == 5 && c == 2 && in) {                                                              // FAST_INIT
         const PASSTHRU_MSG *q = (const PASSTHRU_MSG*)in; unsigned long addr = q->Data[1];
         if (q->DataSize < 4 || !g_car.hasKline(addr)) { Sleep(60); return 9; }                   // ERR_TIMEOUT
@@ -70,6 +73,16 @@ __declspec(dllexport) long __stdcall PassThruWriteMsgs(unsigned long c, const PA
         if (c == 1 && m[i].DataSize > 4) {
             unsigned long id = ((unsigned long)m[i].Data[0] << 24) | (m[i].Data[1] << 16) | (m[i].Data[2] << 8) | m[i].Data[3];
             g_car.handle(id, m[i].Data + 4, m[i].DataSize - 4); collect(1, 0);
+        } else if (c == 3 && m[i].DataSize >= 4) {                                   // raw CAN frame -> TP 2.0 unit
+            pt::CanFrame f; f.id = ((unsigned long)m[i].Data[0] << 24) | (m[i].Data[1] << 16) | (m[i].Data[2] << 8) | m[i].Data[3];
+            f.d.assign(m[i].Data + 4, m[i].Data + m[i].DataSize);
+            g_tp.handle(f);
+            while (!g_tp.out.empty()) {
+                const pt::CanFrame &o = g_tp.out.front(); PASSTHRU_MSG r = {0}; r.ProtocolID = 5;
+                r.Data[0] = 0; r.Data[1] = 0; r.Data[2] = (o.id >> 8) & 0xFF; r.Data[3] = o.id & 0xFF;
+                memcpy(r.Data + 4, o.d.data(), o.d.size()); r.DataSize = 4 + (unsigned long)o.d.size();
+                g_rx[3].push_back(r); g_tp.out.pop_front();
+            }
         } else if (c == 2 && m[i].DataSize >= 4) {
             unsigned long addr = m[i].Data[1]; size_t h = 3, len = m[i].Data[0] & 0x3F;
             if (len == 0) len = m[i].Data[h++];
@@ -79,7 +92,7 @@ __declspec(dllexport) long __stdcall PassThruWriteMsgs(unsigned long c, const PA
     return 0;
 }
 __declspec(dllexport) long __stdcall PassThruReadMsgs(unsigned long c, PASSTHRU_MSG *m, unsigned long *num, unsigned long tmo) {
-    if (c >= 3 || g_rx[c].empty()) { Sleep(tmo < 20 ? tmo : 20); *num = 0; return 0x10; }       // ERR_BUFFER_EMPTY
+    if (c >= 4 || g_rx[c].empty()) { Sleep(tmo < 20 ? tmo : 20); *num = 0; return 0x10; }       // ERR_BUFFER_EMPTY
     m[0] = g_rx[c].front(); g_rx[c].pop_front(); *num = 1; return 0;
 }
 }

@@ -28,7 +28,8 @@ inline std::string hexStr(const std::vector<uint8_t> &v) { return hexStr(v.data(
 
 // How a control unit is reached.
 enum LinkKind { LINK_CAN = 0,      // ISO 15765-2 on the diagnostic CAN, 500 kbit/s, 11- or 29-bit ids
-                LINK_KLINE = 1 };  // ISO 14230 (KWP2000) on the K-line, 10400 baud, fast init; tx = ECU address
+                LINK_KLINE = 1,    // ISO 14230 (KWP2000) on the K-line, 10400 baud, fast init; tx = ECU address
+                LINK_TP20 = 2 };   // VW TP 2.0 on the diagnostic CAN (units behind the gateway); tx = VW diagnostic address
 
 class Bus {
 public:
