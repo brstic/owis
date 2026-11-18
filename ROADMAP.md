@@ -75,8 +75,8 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
 ### 6. Distribution
 - [x] macOS and Linux: `porschetool-cli --slcan <port>` for serial CAN adapters (CANable, CANtact, USBtin ...), with
       ISO-TP and TP 2.0 in user space; Linux also `--can <iface>` (SocketCAN). Tested through a pseudo-terminal.
-- [ ] Publish `porsche-tool` as a public repo: banner, README, release of `PorscheTool.exe`, the CLI and the English
-      packs — same redaction rules as the pdk tool (no PIWIS texts, VINs or unlock constants). **Needs the owner's go.**
+- [x] Published: https://github.com/brstic/porsche-tool — banner, README, release v0.5 with `PorscheTool.exe`, the macOS
+      CLI and the English packs (no original database texts, VINs or unlock constants).
 
 ## Limits that are not ours to lift
 - **SFD (online authentication)** on newer 992 / Taycan / 9Y0 / 971 control units: coding writes need the
