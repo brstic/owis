@@ -66,7 +66,7 @@
 | 🛠️ | **Service jobs** | The workshop procedures, one button each, from session to result — see [below](#service-jobs). |
 | 📈 | **Live data** | Several values at once, with a live graph and a CSV log. |
 | 🧪 | **Every function** | All actuator tests, routines, adaptation and coding values the unit's database defines (up to ~26 000 per car). |
-| 🔐 | **Coding** | Coding writes unlock themselves with the unit's own seed/key algorithm — taken from the database, never guessed. |
+| 🔐 | **Coding** | Supported: coding writes unlock themselves with the unit's own seed/key algorithm (from the database, never guessed). You must first build **`owis.keys`** from your own installation — see [Vehicle data](#vehicle-data). Without it, everything except coding writes still works. |
 | 📄 | **Reports** | Text and printable HTML report of every scan; the VIN can be hidden for sharing. |
 | 🎞️ | **Record / replay** | Every session is recorded and can be replayed later without the car. |
 | ⚠️ | **Safety notes** | A plain-language hazard note before anything that moves, bleeds, lifts or writes. |
@@ -190,11 +190,19 @@ python3 builder/build_data.py "<...>/Projects-V" ["<...>/PIDT_MIG/Projects-V"] -
 ```
 
 It needs Python 3 and writes English packs for every vehicle line it finds (the English texts come from the
-translation cache shipped in `tools/i18n/`, so no translation model and no internet are needed). The coding **key
-file** (`owis.keys`) is likewise built locally from your own installation: `tools/seedkey/` reads its
-`ASAM_seedkey_*.jar` files and `tools/build_keyfile.py` assembles the key file (see `tools/seedkey/README.md`). OWIS
-ships no unlock constants, only the tooling to derive them from your own install. Full details in
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+translation cache shipped in `tools/i18n/`, so no translation model and no internet are needed).
+
+**Coding (`owis.keys`).** Coding *is* supported, but you must build the key file once, also from your own
+installation — OWIS ships the tooling, not the keys. `tools/seedkey/` reads the install's `ASAM_seedkey_*.jar`
+files and `tools/build_keyfile.py` assembles `owis.keys`; put it next to the exe:
+
+```sh
+# derive the algorithms from your own PIWIS install, then build the key file (see tools/seedkey/README.md)
+python3 tools/build_keyfile.py <your seed/key catalogue> owis.keys
+```
+
+Without `owis.keys` everything except coding writes still works. OWIS ships no unlock constants or keys, only the
+tooling to derive them from your own install. Full details in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Without the data, `--demo` still runs a built-in simulated car so you can try everything.
 
