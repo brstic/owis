@@ -78,7 +78,8 @@ that goal; the work is not finished until a workshop never has to reach for PIWI
       ISO-TP and TP 2.0 in user space; Linux also `--can <iface>` (SocketCAN). Tested through a pseudo-terminal.
 - [x] Published: https://github.com/brstic/owis — banner, README, release v0.5 with `OWIS.exe` and the macOS CLI.
       Vehicle data and the coding key file are built locally from the user's own installation; OWIS ships no
-      original database texts, VINs or unlock constants, and no tooling to extract them.
+      original database texts, VINs or unlock constants. The data packs and the coding key file are built locally
+      from the user's own licensed install (`builder/build_data.py`, `tools/seedkey/` + `tools/build_keyfile.py`).
 
 ## Limits that are not ours to lift
 - 992 / Taycan / 9Y0 / 971: their databases name no offline coding algorithm - coding there needs SFD (below).

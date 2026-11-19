@@ -131,11 +131,12 @@ long names are missing and the parameter parser silently loses most of the reque
 Needed only for coding **writes** (`0x2E`) and a few actuator tests; reading, live data, routines and most tests
 need no key.
 
-OWIS ships **no** unlock constants and includes no tooling to extract them. The algorithm *name* each control
-unit uses for coding is read from the unit's own database entry (`odxdb.Ecu.codierung_algo`) — the authoritative
-reference, not a guess — and that name alone is what a pack carries (its `sk` field). The actual constants are kept
-in a local key file (`owis.keys`, gitignored) that a user generates from their own licensed installation with
-`tools/build_keyfile.py`. Without that file everything except coding writes still works.
+OWIS ships **no** unlock constants — only the tooling to derive them from your own licensed PIWIS install. The
+algorithm *name* each control unit uses for coding is read from the unit's own database entry
+(`odxdb.Ecu.codierung_algo`) — the authoritative reference, not a guess — and that name alone is what a pack carries
+(its `sk` field). The actual constants are kept in a local key file (`owis.keys`, gitignored) that a user generates
+from their own installation: `tools/seedkey/` reads the install's `ASAM_seedkey_*.jar` files and `tools/build_keyfile.py`
+assembles `owis.keys` from the result. Without that file everything except coding writes still works.
 
 The computation itself (in `src/seedkey.h`) is a small set of families — keyed-multiply, table lookup, a few
 rotate/LFSR variants — standard `seed → key` math; the file holds the per-algorithm parameters, which stay local.

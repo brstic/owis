@@ -191,8 +191,10 @@ python3 builder/build_data.py "<...>/Projects-V" ["<...>/PIDT_MIG/Projects-V"] -
 
 It needs Python 3 and writes English packs for every vehicle line it finds (the English texts come from the
 translation cache shipped in `tools/i18n/`, so no translation model and no internet are needed). The coding **key
-file** (`owis.keys`) is likewise built locally, from your own installation, with `tools/build_keyfile.py`; OWIS
-ships no unlock constants. Full details in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+file** (`owis.keys`) is likewise built locally from your own installation: `tools/seedkey/` reads its
+`ASAM_seedkey_*.jar` files and `tools/build_keyfile.py` assembles the key file (see `tools/seedkey/README.md`). OWIS
+ships no unlock constants, only the tooling to derive them from your own install. Full details in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Without the data, `--demo` still runs a built-in simulated car so you can try everything.
 

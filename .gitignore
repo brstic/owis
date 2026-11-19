@@ -10,10 +10,11 @@ data/
 # Codierung key file and seed/key constants - LOCAL ONLY, hold unlock keys, never commit
 owis.keys
 *.keys
-tools/seedkey/*catalog*.json
-tools/seedkey/kmul.json
-tools/seedkey/algos.json
+# seed/key: ship the TOOLING (*.java, *.py, README) only; never the extracted catalogue/keys
+tools/seedkey/*.json
+tools/seedkey/*.txt
 tools/seedkey/full_tables/
+tools/seedkey/stub/
 tools/i18n/untranslated_*.json
 __pycache__/
 .DS_Store
